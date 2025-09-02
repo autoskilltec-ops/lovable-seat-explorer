@@ -14,16 +14,316 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      bus_seats: {
+        Row: {
+          created_at: string | null
+          id: string
+          reserved_until: string | null
+          seat_number: number
+          status: Database["public"]["Enums"]["seat_status"] | null
+          trip_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          reserved_until?: string | null
+          seat_number: number
+          status?: Database["public"]["Enums"]["seat_status"] | null
+          trip_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          reserved_until?: string | null
+          seat_number?: number
+          status?: Database["public"]["Enums"]["seat_status"] | null
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bus_seats_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      destinations: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          name: string
+          state: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          state: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          state?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          id: string
+          installments: number | null
+          method: Database["public"]["Enums"]["payment_method"]
+          pix_payload: string | null
+          reservation_id: string
+          status: Database["public"]["Enums"]["payment_status"] | null
+          stripe_session_id: string | null
+          transacao_ref: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          id?: string
+          installments?: number | null
+          method: Database["public"]["Enums"]["payment_method"]
+          pix_payload?: string | null
+          reservation_id: string
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_session_id?: string | null
+          transacao_ref?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          id?: string
+          installments?: number | null
+          method?: Database["public"]["Enums"]["payment_method"]
+          pix_payload?: string | null
+          reservation_id?: string
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_session_id?: string | null
+          transacao_ref?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_reservation_id_fkey"
+            columns: ["reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"] | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reservations: {
+        Row: {
+          codigo_confirmacao: string
+          created_at: string | null
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          passengers: number
+          plan_type: string
+          seat_ids: string[]
+          status: Database["public"]["Enums"]["reservation_status"] | null
+          total_amount: number
+          trip_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          codigo_confirmacao: string
+          created_at?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          passengers: number
+          plan_type: string
+          seat_ids: string[]
+          status?: Database["public"]["Enums"]["reservation_status"] | null
+          total_amount: number
+          trip_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          codigo_confirmacao?: string
+          created_at?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          passengers?: number
+          plan_type?: string
+          seat_ids?: string[]
+          status?: Database["public"]["Enums"]["reservation_status"] | null
+          total_amount?: number
+          trip_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservations_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          created_at: string | null
+          departure_date: string
+          destination_id: string
+          id: string
+          includes_accommodation: boolean | null
+          includes_breakfast: boolean | null
+          max_seats: number | null
+          price_couple: number
+          price_group: number
+          price_individual: number
+          return_date: string
+        }
+        Insert: {
+          created_at?: string | null
+          departure_date: string
+          destination_id: string
+          id?: string
+          includes_accommodation?: boolean | null
+          includes_breakfast?: boolean | null
+          max_seats?: number | null
+          price_couple: number
+          price_group: number
+          price_individual: number
+          return_date: string
+        }
+        Update: {
+          created_at?: string | null
+          departure_date?: string
+          destination_id?: string
+          id?: string
+          includes_accommodation?: boolean | null
+          includes_breakfast?: boolean | null
+          max_seats?: number | null
+          price_couple?: number
+          price_group?: number
+          price_individual?: number
+          return_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trips_destination_id_fkey"
+            columns: ["destination_id"]
+            isOneToOne: false
+            referencedRelation: "destinations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      clean_expired_seat_holds: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      generate_confirmation_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      payment_method: "pix" | "cartao"
+      payment_status: "iniciado" | "aprovado" | "recusado" | "cancelado"
+      reservation_status: "pendente" | "pago" | "cancelado"
+      seat_status: "disponivel" | "reservado_temporario" | "ocupado"
+      user_role: "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +450,12 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      payment_method: ["pix", "cartao"],
+      payment_status: ["iniciado", "aprovado", "recusado", "cancelado"],
+      reservation_status: ["pendente", "pago", "cancelado"],
+      seat_status: ["disponivel", "reservado_temporario", "ocupado"],
+      user_role: ["user", "admin"],
+    },
   },
 } as const
