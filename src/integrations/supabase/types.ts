@@ -118,6 +118,7 @@ export type Database = {
           id: string
           installments: number | null
           method: Database["public"]["Enums"]["payment_method"]
+          payment_method_preference: Database["public"]["Enums"]["payment_preference"]
           pix_payload: string | null
           reservation_id: string
           status: Database["public"]["Enums"]["payment_status"] | null
@@ -133,6 +134,7 @@ export type Database = {
           id?: string
           installments?: number | null
           method: Database["public"]["Enums"]["payment_method"]
+          payment_method_preference?: Database["public"]["Enums"]["payment_preference"]
           pix_payload?: string | null
           reservation_id: string
           status?: Database["public"]["Enums"]["payment_status"] | null
@@ -148,6 +150,7 @@ export type Database = {
           id?: string
           installments?: number | null
           method?: Database["public"]["Enums"]["payment_method"]
+          payment_method_preference?: Database["public"]["Enums"]["payment_preference"]
           pix_payload?: string | null
           reservation_id?: string
           status?: Database["public"]["Enums"]["payment_status"] | null
@@ -320,6 +323,7 @@ export type Database = {
     }
     Enums: {
       payment_method: "pix" | "cartao"
+      payment_preference: "pix" | "cartao_credito" | "cartao_debito"
       payment_status: "iniciado" | "aprovado" | "recusado" | "cancelado"
       reservation_status: "pendente" | "pago" | "cancelado"
       seat_status: "disponivel" | "reservado_temporario" | "ocupado"
@@ -452,6 +456,7 @@ export const Constants = {
   public: {
     Enums: {
       payment_method: ["pix", "cartao"],
+      payment_preference: ["pix", "cartao_credito", "cartao_debito"],
       payment_status: ["iniciado", "aprovado", "recusado", "cancelado"],
       reservation_status: ["pendente", "pago", "cancelado"],
       seat_status: ["disponivel", "reservado_temporario", "ocupado"],

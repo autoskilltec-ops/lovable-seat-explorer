@@ -1,81 +1,442 @@
-import { Card } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CreditCard, QrCode } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, MessageCircle } from "lucide-react";
 
-const Checkout = () => {
+interface Trip {
+  id: string;
+  departure_date: string;
+  return_date: string;
+  price_individual: number;
+  price_couple: number;
+  price_group: number;
+  destination: {
+    name: string;
+    state: string;
+  };
+}
+
+export default function Checkout() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
+    planType: "individual",
+    passengers: 1,
+    customerName: "",
+    customerPhone: "",
+    customerEmail: "",
+    customerCpf: "",
+    emergencyContact: "",
+    paymentMethod: "pix" as "pix" | "cartao_credito" | "cartao_debito",
+    observations: "",
+  });
+
+  const tripId = searchParams.get("trip_id");
+  const planType = searchParams.get("plan") || "individual";
+
+  useEffect(() => {
+    if (tripId) {
+      fetchTrip();
+    }
+    setFormData(prev => ({ ...prev, planType }));
+  }, [tripId, planType]);
+
+  const fetchTrip = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("trips")
+        .select(`
+          *,
+          destination:destinations(name, state)
+        `)
+        .eq("id", tripId)
+        .single();
+
+      if (error) throw error;
+      setTrip(data);
+    } catch (error) {
+      console.error("Erro ao carregar viagem:", error);
+      toast({
+        title: "Erro",
+        description: "Viagem não encontrada",
+        variant: "destructive",
+      });
+      navigate("/destinos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPlanPrice = () => {
+    if (!trip) return 0;
+    switch (formData.planType) {
+      case "couple":
+        return trip.price_couple;
+      case "group":
+        return trip.price_group;
+      default:
+        return trip.price_individual;
+    }
+  };
+
+  const getTotalAmount = () => {
+    return getPlanPrice() * formData.passengers;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Erro",
+          description: "Você precisa estar logado para fazer uma reserva",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+
+      // Criar perfil se não existir
+      await supabase
+        .from("profiles")
+        .upsert({
+          user_id: user.id,
+          email: formData.customerEmail,
+          full_name: formData.customerName,
+          phone: formData.customerPhone,
+        });
+
+      // Criar reserva
+      const { data: reservation, error: reservationError } = await supabase
+        .from("reservations")
+        .insert({
+          user_id: user.id,
+          trip_id: tripId,
+          plan_type: formData.planType,
+          passengers: formData.passengers,
+          total_amount: getTotalAmount(),
+          customer_name: formData.customerName,
+          customer_phone: formData.customerPhone,
+          customer_email: formData.customerEmail,
+          customer_cpf: formData.customerCpf,
+          emergency_contact: formData.emergencyContact,
+          codigo_confirmacao: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        })
+        .select()
+        .single();
+
+      if (reservationError) throw reservationError;
+
+      // Criar registro de pagamento
+      await supabase
+        .from("payments")
+        .insert({
+          reservation_id: reservation.id,
+          amount: getTotalAmount(),
+          method: formData.paymentMethod,
+          payment_method_preference: formData.paymentMethod,
+        });
+
+      // Enviar para WhatsApp
+      sendToWhatsApp(reservation);
+
+      toast({
+        title: "Reserva criada com sucesso!",
+        description: "Você será redirecionado para o WhatsApp",
+      });
+
+    } catch (error: any) {
+      console.error("Erro ao criar reserva:", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao criar reserva",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sendToWhatsApp = (reservation: any) => {
+    if (!trip) return;
+
+    const message = `🚌 *NOVA RESERVA DE VIAGEM*
+
+👤 *Cliente:* ${formData.customerName}
+📱 *Telefone:* ${formData.customerPhone}
+📧 *Email:* ${formData.customerEmail}
+🆔 *CPF:* ${formData.customerCpf}
+🚨 *Contato Emergência:* ${formData.emergencyContact}
+
+🎯 *Destino:* ${trip.destination.name} - ${trip.destination.state}
+📅 *Ida:* ${new Date(trip.departure_date).toLocaleDateString("pt-BR")}
+📅 *Volta:* ${new Date(trip.return_date).toLocaleDateString("pt-BR")}
+
+👥 *Plano:* ${formData.planType === "individual" ? "Individual" : formData.planType === "couple" ? "Casal" : "Grupo"}
+🎫 *Passageiros:* ${formData.passengers}
+💰 *Valor Total:* ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(getTotalAmount())}
+
+💳 *Método de Pagamento Preferido:* ${formData.paymentMethod === "pix" ? "PIX" : formData.paymentMethod === "cartao_credito" ? "Cartão de Crédito" : "Cartão de Débito"}
+
+🔖 *Código da Reserva:* ${reservation.codigo_confirmacao}
+
+${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/5586988821090?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, "_blank");
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded"></div>
+          <div className="h-64 bg-muted rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <h2 className="text-2xl font-bold mb-4">Viagem não encontrada</h2>
+        <Button onClick={() => navigate("/destinos")}>
+          Voltar aos Destinos
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen p-4">
-      <div className="container mx-auto py-8 max-w-4xl">
-        {/* Header */}
-        <div className="mb-8">
-          <Button
-            variant="ghost" 
-            asChild
-            className="glass-surface border-0 hover:glass-hover mb-6"
-          >
-            <Link to="/reserva">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar à Reserva
-            </Link>
-          </Button>
-          
-          <h1 className="text-4xl md:text-5xl font-bold text-gradient mb-4">
-            Finalizar Pagamento
-          </h1>
-          <p className="text-xl text-muted-foreground">
-            Escolha a forma de pagamento para confirmar sua reserva
-          </p>
-        </div>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <Button
+        variant="ghost"
+        onClick={() => navigate("/destinos")}
+        className="mb-6"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Voltar aos Destinos
+      </Button>
 
-        {/* Payment Methods Placeholder */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="glass-card p-8 border-0 hover:glass-hover transition-all duration-300 cursor-pointer">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 glass-surface rounded-xl flex items-center justify-center mx-auto">
-                <QrCode className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-gradient">PIX</h3>
-              <p className="text-muted-foreground">
-                Pagamento instantâneo via PIX
-              </p>
-              <Button className="w-full glass-button border-0">
-                Pagar com PIX
-              </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Resumo da Viagem */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Resumo da Viagem</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="font-semibold">{trip.destination.name}</h3>
+              <Badge variant="secondary">{trip.destination.state}</Badge>
             </div>
-          </Card>
-
-          <Card className="glass-card p-8 border-0 hover:glass-hover transition-all duration-300 cursor-pointer">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 glass-surface rounded-xl flex items-center justify-center mx-auto">
-                <CreditCard className="h-8 w-8 text-primary" />
+            
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Ida:</span>
+                <span>{new Date(trip.departure_date).toLocaleDateString("pt-BR")}</span>
               </div>
-              <h3 className="text-2xl font-bold text-gradient">Cartão</h3>
-              <p className="text-muted-foreground">
-                Parcelamento em até 12x sem juros
-              </p>
-              <Button className="w-full glass-button border-0">
-                Pagar com Cartão
-              </Button>
+              <div className="flex justify-between">
+                <span>Volta:</span>
+                <span>{new Date(trip.return_date).toLocaleDateString("pt-BR")}</span>
+              </div>
             </div>
-          </Card>
-        </div>
 
-        {/* Coming Soon Message */}
-        <Card className="glass-card p-12 border-0 text-center mt-8">
-          <div className="space-y-4">
-            <h3 className="text-2xl font-bold text-gradient">
-              Sistema de Pagamento
-            </h3>
-            <p className="text-lg text-muted-foreground">
-              A integração com pagamentos PIX e cartão será implementada na próxima etapa.
-              Por enquanto, você pode explorar as outras funcionalidades do sistema.
-            </p>
-          </div>
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between">
+                <span>Plano:</span>
+                <span className="capitalize">{formData.planType}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Passageiros:</span>
+                <span>{formData.passengers}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-lg">
+                <span>Total:</span>
+                <span>
+                  {new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(getTotalAmount())}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Formulário */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Dados da Reserva</CardTitle>
+            <CardDescription>
+              Preencha seus dados para finalizar a reserva
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <Label htmlFor="planType">Plano da Viagem</Label>
+                  <RadioGroup
+                    value={formData.planType}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, planType: value }))}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="individual" id="individual" />
+                      <Label htmlFor="individual">
+                        Individual - {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(trip.price_individual)}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="couple" id="couple" />
+                      <Label htmlFor="couple">
+                        Casal - {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(trip.price_couple)}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="group" id="group" />
+                      <Label htmlFor="group">
+                        Grupo (4+) - {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(trip.price_group)}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div>
+                  <Label htmlFor="passengers">Número de Passageiros</Label>
+                  <Input
+                    id="passengers"
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={formData.passengers}
+                    onChange={(e) => setFormData(prev => ({ ...prev, passengers: parseInt(e.target.value) || 1 }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="customerName">Nome Completo</Label>
+                  <Input
+                    id="customerName"
+                    value={formData.customerName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="customerPhone">Telefone</Label>
+                    <Input
+                      id="customerPhone"
+                      type="tel"
+                      value={formData.customerPhone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customerEmail">Email</Label>
+                    <Input
+                      id="customerEmail"
+                      type="email"
+                      value={formData.customerEmail}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerEmail: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="customerCpf">CPF</Label>
+                    <Input
+                      id="customerCpf"
+                      value={formData.customerCpf}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerCpf: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="emergencyContact">Contato de Emergência</Label>
+                    <Input
+                      id="emergencyContact"
+                      value={formData.emergencyContact}
+                      onChange={(e) => setFormData(prev => ({ ...prev, emergencyContact: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Método de Pagamento Preferido</Label>
+                  <RadioGroup
+                    value={formData.paymentMethod}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, paymentMethod: value as any }))}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="pix" id="pix" />
+                      <Label htmlFor="pix">PIX</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="cartao_credito" id="cartao_credito" />
+                      <Label htmlFor="cartao_credito">Cartão de Crédito</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="cartao_debito" id="cartao_debito" />
+                      <Label htmlFor="cartao_debito">Cartão de Débito</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div>
+                  <Label htmlFor="observations">Observações (opcional)</Label>
+                  <Textarea
+                    id="observations"
+                    placeholder="Alguma informação adicional?"
+                    value={formData.observations}
+                    onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  "Processando..."
+                ) : (
+                  <>
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Enviar para WhatsApp
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
         </Card>
       </div>
     </div>
   );
-};
-
-export default Checkout;
+}
