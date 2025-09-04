@@ -66,9 +66,12 @@ const Home = () => {
                 variant="outline" 
                 size="lg"
                 className="glass-surface border-glass-border/50 hover:glass-hover text-lg px-8 py-6"
+                asChild
               >
-                <Calendar className="mr-2 h-5 w-5" />
-                Minhas Reservas
+                <Link to="/minhas-reservas">
+                  <Calendar className="mr-2 h-5 w-5" />
+                  Minhas Reservas
+                </Link>
               </Button>
             </div>
           </div>
@@ -145,9 +148,9 @@ const Home = () => {
                     <span className="text-2xl font-bold text-primary">
                       {destination.price}
                     </span>
-                    <Button className="glass-button border-0">
-                      Ver Datas
-                    </Button>
+                     <Button className="glass-button border-0" asChild>
+                       <Link to="/destinos">Ver Datas</Link>
+                     </Button>
                   </div>
                 </div>
               </Card>

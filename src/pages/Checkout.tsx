@@ -144,13 +144,15 @@ export default function Checkout() {
       if (reservationError) throw reservationError;
 
       // Criar registro de pagamento
+      const paymentMethod = formData.paymentMethod === "cartao_credito" || formData.paymentMethod === "cartao_debito" ? "cartao" : "pix";
+      
       await supabase
         .from("payments")
         .insert({
-          reservation_id: reservation.id,
           amount: getTotalAmount(),
-          method: formData.paymentMethod,
+          method: paymentMethod,
           payment_method_preference: formData.paymentMethod,
+          reservation_id: reservation.id,
         });
 
       // Enviar para WhatsApp

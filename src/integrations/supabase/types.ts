@@ -216,6 +216,7 @@ export type Database = {
           id: string
           passengers: number
           plan_type: string
+          seat_ids: string[] | null
           status: Database["public"]["Enums"]["reservation_status"] | null
           total_amount: number
           trip_id: string
@@ -233,6 +234,7 @@ export type Database = {
           id?: string
           passengers: number
           plan_type: string
+          seat_ids?: string[] | null
           status?: Database["public"]["Enums"]["reservation_status"] | null
           total_amount: number
           trip_id: string
@@ -250,6 +252,7 @@ export type Database = {
           id?: string
           passengers?: number
           plan_type?: string
+          seat_ids?: string[] | null
           status?: Database["public"]["Enums"]["reservation_status"] | null
           total_amount?: number
           trip_id?: string
