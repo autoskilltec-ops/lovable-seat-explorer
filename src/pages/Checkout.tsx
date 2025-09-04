@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, MessageCircle } from "lucide-react";
+import BusSeatMap from "@/components/BusSeatMap";
 
 interface Trip {
   id: string;
@@ -44,6 +45,8 @@ export default function Checkout() {
     observations: "",
   });
 
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+
   const tripId = searchParams.get("trip_id");
   const planType = searchParams.get("plan") || "individual";
 
@@ -53,6 +56,28 @@ export default function Checkout() {
     }
     setFormData(prev => ({ ...prev, planType }));
   }, [tripId, planType]);
+
+  // Clear selected seats when passenger count changes
+  useEffect(() => {
+    if (selectedSeats.length > formData.passengers) {
+      // Release temporary holds on seats that are no longer needed
+      const seatsToRelease = selectedSeats.slice(formData.passengers);
+      if (seatsToRelease.length > 0) {
+        supabase
+          .from("bus_seats")
+          .update({ 
+            status: 'disponivel',
+            reserved_until: null 
+          })
+          .in("id", seatsToRelease)
+          .then(() => {
+            setSelectedSeats(selectedSeats.slice(0, formData.passengers));
+          });
+      } else {
+        setSelectedSeats([]);
+      }
+    }
+  }, [formData.passengers, selectedSeats]);
 
   const fetchTrip = async () => {
     try {
@@ -136,12 +161,24 @@ export default function Checkout() {
           customer_email: formData.customerEmail,
           customer_cpf: formData.customerCpf,
           emergency_contact: formData.emergencyContact,
+          seat_ids: selectedSeats,
           codigo_confirmacao: Math.random().toString(36).substring(2, 10).toUpperCase(),
         })
         .select()
         .single();
 
       if (reservationError) throw reservationError;
+
+      // Update selected seats to occupied
+      if (selectedSeats.length > 0) {
+        await supabase
+          .from("bus_seats")
+          .update({ 
+            status: 'ocupado',
+            reserved_until: null 
+          })
+          .in("id", selectedSeats);
+      }
 
       // Criar registro de pagamento
       const paymentMethod = formData.paymentMethod === "cartao_credito" || formData.paymentMethod === "cartao_debito" ? "cartao" : "pix";
@@ -156,7 +193,7 @@ export default function Checkout() {
         });
 
       // Enviar para WhatsApp
-      sendToWhatsApp(reservation);
+      await sendToWhatsApp(reservation);
 
       toast({
         title: "Reserva criada com sucesso!",
@@ -175,8 +212,28 @@ export default function Checkout() {
     }
   };
 
-  const sendToWhatsApp = (reservation: any) => {
+  const sendToWhatsApp = async (reservation: any) => {
     if (!trip) return;
+
+    // Get seat numbers for WhatsApp message
+    let seatNumbers = "A definir";
+    if (selectedSeats.length > 0) {
+      try {
+        const { data: seatsData } = await supabase
+          .from("bus_seats")
+          .select("seat_number")
+          .in("id", selectedSeats);
+        
+        if (seatsData) {
+          seatNumbers = seatsData
+            .map(seat => seat.seat_number)
+            .sort((a, b) => a - b)
+            .join(", ");
+        }
+      } catch (error) {
+        console.error("Erro ao buscar números dos assentos:", error);
+      }
+    }
 
     const message = `🚌 *NOVA RESERVA DE VIAGEM*
 
@@ -192,6 +249,7 @@ export default function Checkout() {
 
 👥 *Plano:* ${formData.planType === "individual" ? "Individual" : formData.planType === "couple" ? "Casal" : "Grupo"}
 🎫 *Passageiros:* ${formData.passengers}
+🪑 *Assentos:* ${seatNumbers}
 💰 *Valor Total:* ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(getTotalAmount())}
 
 💳 *Método de Pagamento Preferido:* ${formData.paymentMethod === "pix" ? "PIX" : formData.paymentMethod === "cartao_credito" ? "Cartão de Crédito" : "Cartão de Débito"}
@@ -204,6 +262,21 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
     const whatsappUrl = `https://wa.me/5586988821090?text=${encodedMessage}`;
     
     window.open(whatsappUrl, "_blank");
+  };
+
+  const handleSubmitWithValidation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (selectedSeats.length !== formData.passengers) {
+      toast({
+        title: "Erro",
+        description: `Você deve selecionar ${formData.passengers} assento(s)`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await handleSubmit(e);
   };
 
   if (loading) {
@@ -229,7 +302,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <Button
         variant="ghost"
         onClick={() => navigate("/destinos")}
@@ -239,7 +312,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
         Voltar aos Destinos
       </Button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Resumo da Viagem */}
         <Card>
           <CardHeader>
@@ -284,6 +357,14 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
           </CardContent>
         </Card>
 
+        {/* Seleção de Assentos */}
+        <BusSeatMap
+          tripId={tripId!}
+          maxPassengers={formData.passengers}
+          selectedSeats={selectedSeats}
+          onSeatSelection={setSelectedSeats}
+        />
+
         {/* Formulário */}
         <Card>
           <CardHeader>
@@ -293,7 +374,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmitWithValidation} className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label htmlFor="planType">Plano da Viagem</Label>
