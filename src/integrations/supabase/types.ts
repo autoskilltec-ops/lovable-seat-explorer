@@ -125,6 +125,7 @@ export type Database = {
           stripe_session_id: string | null
           transacao_ref: string | null
           updated_at: string | null
+          whatsapp_sent_at: string | null
         }
         Insert: {
           amount: number
@@ -141,6 +142,7 @@ export type Database = {
           stripe_session_id?: string | null
           transacao_ref?: string | null
           updated_at?: string | null
+          whatsapp_sent_at?: string | null
         }
         Update: {
           amount?: number
@@ -157,6 +159,7 @@ export type Database = {
           stripe_session_id?: string | null
           transacao_ref?: string | null
           updated_at?: string | null
+          whatsapp_sent_at?: string | null
         }
         Relationships: [
           {
@@ -205,12 +208,14 @@ export type Database = {
         Row: {
           codigo_confirmacao: string
           created_at: string | null
+          customer_cpf: string | null
+          customer_email: string | null
           customer_name: string
           customer_phone: string | null
+          emergency_contact: string | null
           id: string
           passengers: number
           plan_type: string
-          seat_ids: string[]
           status: Database["public"]["Enums"]["reservation_status"] | null
           total_amount: number
           trip_id: string
@@ -220,12 +225,14 @@ export type Database = {
         Insert: {
           codigo_confirmacao: string
           created_at?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
           customer_name: string
           customer_phone?: string | null
+          emergency_contact?: string | null
           id?: string
           passengers: number
           plan_type: string
-          seat_ids: string[]
           status?: Database["public"]["Enums"]["reservation_status"] | null
           total_amount: number
           trip_id: string
@@ -235,12 +242,14 @@ export type Database = {
         Update: {
           codigo_confirmacao?: string
           created_at?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
           customer_name?: string
           customer_phone?: string | null
+          emergency_contact?: string | null
           id?: string
           passengers?: number
           plan_type?: string
-          seat_ids?: string[]
           status?: Database["public"]["Enums"]["reservation_status"] | null
           total_amount?: number
           trip_id?: string
