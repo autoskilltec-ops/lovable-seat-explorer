@@ -44,6 +44,15 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
       // If no seats exist for this trip, create them
       if (!data || data.length === 0) {
         await createSeatsForTrip();
+      } else if (data.length < 60) {
+        // Ensure we always have 60 seats created
+        await ensureSeatCount(data);
+        const { data: refreshed } = await supabase
+          .from("bus_seats")
+          .select("*")
+          .eq("trip_id", tripId)
+          .order("seat_number");
+        setSeats(refreshed || []);
       } else {
         setSeats(data);
       }
@@ -61,7 +70,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
   const createSeatsForTrip = async () => {
     try {
-      const seatsToCreate = Array.from({ length: 45 }, (_, i) => ({
+      const seatsToCreate = Array.from({ length: 60 }, (_, i) => ({
         trip_id: tripId,
         seat_number: i + 1,
         status: 'disponivel' as const,
@@ -84,6 +93,26 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     }
   };
 
+  // Creates missing seats to reach 60 for an existing trip
+  const ensureSeatCount = async (existingSeats: BusSeat[]) => {
+    try {
+      const existingNumbers = new Set(existingSeats.map(s => s.seat_number));
+      const missingSeats = Array.from({ length: 60 }, (_, i) => i + 1)
+        .filter(num => !existingNumbers.has(num))
+        .map(num => ({
+          trip_id: tripId,
+          seat_number: num,
+          status: 'disponivel' as const,
+        }));
+
+      if (missingSeats.length > 0) {
+        await supabase.from("bus_seats").insert(missingSeats);
+      }
+    } catch (error) {
+      console.error("Erro ao complementar assentos:", error);
+    }
+  };
+
   const cleanExpiredHolds = async () => {
     try {
       await supabase.rpc('clean_expired_seat_holds');
@@ -94,6 +123,36 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   };
 
   const handleSeatClick = async (seat: BusSeat) => {
+    // If this is a virtual seat (not yet in DB), create it first
+    if (String(seat.id).startsWith("virtual-")) {
+      try {
+        const { data, error } = await supabase
+          .from("bus_seats")
+          .insert({ trip_id: tripId, seat_number: seat.seat_number, status: 'disponivel' })
+          .select()
+          .single();
+        if (error) throw error;
+        if (data) {
+          await fetchSeats();
+          // After creating, proceed as if the user clicked the real seat
+          await handleSeatClick({
+            id: data.id,
+            seat_number: data.seat_number,
+            status: data.status,
+            reserved_until: data.reserved_until,
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao criar assento:", error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível criar o assento.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     if (seat.status === 'ocupado') return;
 
     const isSelected = selectedSeats.includes(seat.id);
@@ -168,12 +227,11 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   };
 
   const renderBusLayout = () => {
-    if (seats.length === 0) return null;
-
-    const leftSeats = seats.filter(seat => seat.seat_number % 4 === 1 || seat.seat_number % 4 === 2);
-    const rightSeats = seats.filter(seat => seat.seat_number % 4 === 3 || seat.seat_number % 4 === 0);
-
-    const rows = Math.ceil(seats.length / 4);
+    // Always show 60 seats visually (15 rows of 4)
+    const totalSeatsToShow = 60;
+    const rows = Math.ceil(totalSeatsToShow / 4);
+    const seatByNumber = new Map<number, BusSeat>();
+    for (const s of seats) seatByNumber.set(s.seat_number, s);
 
     return (
       <div className="bg-card border rounded-lg p-4">
@@ -188,12 +246,15 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         <div className="space-y-2">
           {Array.from({ length: rows }, (_, rowIndex) => {
             const rowNumber = rowIndex + 1;
-            const leftPair = leftSeats.filter(seat => 
-              Math.ceil(seat.seat_number / 4) === rowNumber
-            );
-            const rightPair = rightSeats.filter(seat => 
-              Math.ceil(seat.seat_number / 4) === rowNumber
-            );
+            const base = rowIndex * 4;
+            const leftPairNumbers = [base + 1, base + 2];
+            const rightPairNumbers = [base + 3, base + 4];
+            const leftPair = leftPairNumbers
+              .filter(n => n <= totalSeatsToShow)
+              .map(n => seatByNumber.get(n) || ({ id: `virtual-${n}`, seat_number: n, status: 'disponivel' as const } as BusSeat));
+            const rightPair = rightPairNumbers
+              .filter(n => n <= totalSeatsToShow)
+              .map(n => seatByNumber.get(n) || ({ id: `virtual-${n}`, seat_number: n, status: 'disponivel' as const } as BusSeat));
 
             return (
               <div key={rowIndex} className="flex justify-between items-center gap-8">
@@ -243,21 +304,21 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         </div>
 
         {/* Legend */}
-        <div className="flex justify-center gap-4 mt-4 text-xs">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-4 text-[10px] sm:text-xs">
           <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-secondary rounded"></div>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-secondary rounded"></div>
             <span>Disponível</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-primary rounded"></div>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-primary rounded"></div>
             <span>Selecionado</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-muted rounded"></div>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-muted rounded"></div>
             <span>Reservado</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-4 h-4 bg-destructive rounded"></div>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-destructive rounded"></div>
             <span>Ocupado</span>
           </div>
         </div>
