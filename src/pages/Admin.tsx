@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Settings, 
   Users, 
@@ -10,10 +12,14 @@ import {
   TrendingUp,
   CheckCircle,
   Clock,
-  XCircle 
+  XCircle,
+  ClipboardList
 } from "lucide-react";
+import ReservationManagement from "@/components/admin/ReservationManagement";
 
 const Admin = () => {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  
   // Mock data - será substituído por dados reais
   const stats = {
     totalReservas: 156,
@@ -78,14 +84,27 @@ const Admin = () => {
     <div className="min-h-screen p-4">
       <div className="container mx-auto py-8">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-8">
           <h1 className="text-4xl md:text-6xl font-bold text-gradient mb-6">
             Painel Administrativo
           </h1>
-          <p className="text-xl text-muted-foreground">
+          <p className="text-xl text-muted-foreground mb-6">
             Gerencie reservas, destinos e monitore o desempenho do negócio
           </p>
-        </div>
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="glass-surface border-glass-border/30">
+              <TabsTrigger value="dashboard" className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger value="reservations" className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" />
+                Reservas
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="dashboard" className="mt-8 space-y-8">
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -246,18 +265,13 @@ const Admin = () => {
           </div>
         </Card>
 
-        {/* Coming Soon Message */}
-        <Card className="glass-card p-8 border-0 text-center mt-8">
-          <div className="space-y-4">
-            <h3 className="text-2xl font-bold text-gradient">
-              Funcionalidades Administrativas
-            </h3>
-            <p className="text-lg text-muted-foreground">
-              O painel completo de administração será implementado nas próximas etapas, 
-              incluindo gestão de banco de dados, confirmação de reservas e relatórios detalhados.
-            </p>
-          </div>
-        </Card>
+            </TabsContent>
+
+            <TabsContent value="reservations" className="mt-8">
+              <ReservationManagement />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
