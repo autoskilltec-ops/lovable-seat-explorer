@@ -2,44 +2,71 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
+import Landing from "./pages/Landing";
 import Destinos from "./pages/Destinos";
 import Reserva from "./pages/Reserva";
 import Checkout from "./pages/Checkout";
 import MinhasReservas from "./pages/MinhasReservas";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Redirect root to home */}
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          
-          {/* Auth page without layout */}
-          <Route path="/auth" element={<Auth />} />
-          
-          {/* Pages with layout */}
-          <Route path="/home" element={<Layout><Home /></Layout>} />
-          <Route path="/destinos" element={<Layout><Destinos /></Layout>} />
-          <Route path="/reserva" element={<Layout><Reserva /></Layout>} />
-          <Route path="/checkout" element={<Layout><Checkout /></Layout>} />
-          <Route path="/minhas-reservas" element={<Layout><MinhasReservas /></Layout>} />
-          <Route path="/admin" element={<Layout><Admin /></Layout>} />
-          
-          {/* Catch-all route */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            
+            {/* Protected routes with layout */}
+            <Route path="/home" element={
+              <ProtectedRoute>
+                <Layout><Home /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/destinos" element={
+              <ProtectedRoute>
+                <Layout><Destinos /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/reserva" element={
+              <ProtectedRoute>
+                <Layout><Reserva /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/checkout" element={
+              <ProtectedRoute>
+                <Layout><Checkout /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/minhas-reservas" element={
+              <ProtectedRoute>
+                <Layout><MinhasReservas /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin" element={
+              <ProtectedRoute>
+                <Layout><Admin /></Layout>
+              </ProtectedRoute>
+            } />
+            
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
