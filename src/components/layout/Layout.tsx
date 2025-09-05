@@ -26,10 +26,10 @@ const Layout = ({ children }: LayoutProps) => {
         <Header />
         {user && (
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm"
             onClick={handleLogout}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 glass-surface border-0 hover:glass-hover hover:bg-destructive/20 hover:text-destructive transition-all duration-200"
           >
             <LogOut className="h-4 w-4" />
             Sair

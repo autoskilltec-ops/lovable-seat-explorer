@@ -1,10 +1,31 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { MapPin, User, Menu } from "lucide-react";
+import { MapPin, User, Menu, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const location = useLocation();
+  const { user } = useAuth();
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+
+  const isAdmin = profile?.role === 'admin';
 
   const navItems = [
     { href: "/home", label: "Início" },
@@ -47,6 +68,19 @@ const Header = () => {
 
           {/* User Menu & Mobile Menu */}
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                asChild
+                className="glass-surface border-0 hover:glass-hover hidden sm:flex bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                <Link to="/admin">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin
+                </Link>
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               size="sm"
@@ -85,6 +119,18 @@ const Header = () => {
                         <Link to={item.href}>{item.label}</Link>
                       </Button>
                     ))}
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        asChild
+                        className="w-full justify-start glass-surface border-0 hover:glass-hover bg-primary/10 text-primary hover:bg-primary/20"
+                      >
+                        <Link to="/admin">
+                          <Settings className="h-4 w-4 mr-2" />
+                          Admin
+                        </Link>
+                      </Button>
+                    )}
                   </nav>
                   <div className="pt-4 border-t border-glass-border/30">
                     <Button className="w-full glass-button border-0">
