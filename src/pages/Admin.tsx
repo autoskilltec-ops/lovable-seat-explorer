@@ -106,31 +106,6 @@ const Admin = () => {
     }
   };
 
-  const confirmReservation = async (reservationId: string) => {
-    try {
-      const { error } = await supabase
-        .from('reservations')
-        .update({ status: 'pago' })
-        .eq('id', reservationId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Reserva confirmada!",
-        description: "A reserva foi confirmada com sucesso",
-      });
-
-      // Recarregar dados do dashboard
-      fetchDashboardData();
-    } catch (error) {
-      console.error('Erro ao confirmar reserva:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível confirmar a reserva",
-        variant: "destructive"
-      });
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     const statusMap = {
@@ -331,19 +306,13 @@ const Admin = () => {
                     </div>
                     
                     <div className="flex gap-2">
-                          <Button size="sm" className="glass-button border-0 text-xs">
-                            Ver
+                          <Button 
+                            size="sm" 
+                            className="glass-button border-0 text-xs"
+                            onClick={() => setActiveTab("reservations")}
+                          >
+                            Gerenciar
                           </Button>
-                          {reserva.status === "pendente" && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="glass-surface border-glass-border/50 hover:glass-hover text-xs"
-                              onClick={() => confirmReservation(reserva.reservationId)}
-                            >
-                              Confirmar
-                            </Button>
-                          )}
                     </div>
                   </div>
                 </div>
