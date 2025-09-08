@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Settings, 
   Users, 
@@ -19,41 +21,116 @@ import ReservationManagement from "@/components/admin/ReservationManagement";
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
-  
-  // Mock data - será substituído por dados reais
-  const stats = {
-    totalReservas: 156,
-    reservasPendentes: 23,
-    receitaMes: 152450,
-    ocupacaoMedia: 78
+  const [stats, setStats] = useState({
+    totalReservas: 0,
+    reservasPendentes: 0,
+    receitaMes: 0,
+    ocupacaoMedia: 0
+  });
+  const [reservasRecentes, setReservasRecentes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // Buscar todas as reservas de usuários (não administrativas)
+      const { data: reservations, error: reservationsError } = await supabase
+        .from('reservations')
+        .select(`
+          *,
+          trip:trips (
+            id,
+            departure_date,
+            return_date,
+            destination:destinations (
+              name,
+              state
+            )
+          )
+        `)
+        .not('user_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (reservationsError) throw reservationsError;
+
+      // Calcular estatísticas
+      const totalReservas = reservations?.length || 0;
+      const reservasPendentes = reservations?.filter(r => r.status === 'pendente').length || 0;
+      
+      // Receita do mês atual (reservas pagas)
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const receitaMes = reservations?.filter(r => {
+        const reservationDate = new Date(r.created_at);
+        return r.status === 'pago' && 
+               reservationDate.getMonth() === currentMonth && 
+               reservationDate.getFullYear() === currentYear;
+      }).reduce((total, r) => total + parseFloat(r.total_amount.toString()), 0) || 0;
+
+      // Ocupação média (simplificada - baseada em reservas confirmadas)
+      const reservasConfirmadas = reservations?.filter(r => r.status === 'pago').length || 0;
+      const ocupacaoMedia = totalReservas > 0 ? Math.round((reservasConfirmadas / totalReservas) * 100) : 0;
+
+      setStats({
+        totalReservas,
+        reservasPendentes,
+        receitaMes,
+        ocupacaoMedia
+      });
+
+      // Formatar reservas recentes para exibição
+      const recentReservations = reservations?.slice(0, 5).map(reservation => ({
+        id: reservation.codigo_confirmacao,
+        cliente: reservation.customer_name,
+        destino: `${reservation.trip.destination.name} - ${reservation.trip.destination.state}`,
+        data: new Date(reservation.trip.departure_date).toLocaleDateString('pt-BR'),
+        valor: parseFloat(reservation.total_amount.toString()),
+        status: reservation.status,
+        reservationId: reservation.id
+      })) || [];
+
+      setReservasRecentes(recentReservations);
+    } catch (error) {
+      console.error('Erro ao buscar dados do dashboard:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados do dashboard",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const reservasRecentes = [
-    {
-      id: "RES-156",
-      cliente: "João Silva",
-      destino: "Fortaleza - CE",
-      data: "15/02/2024",
-      valor: 980,
-      status: "pendente"
-    },
-    {
-      id: "RES-155", 
-      cliente: "Maria Santos",
-      destino: "Natal - RN",
-      data: "22/02/2024",
-      valor: 1840,
-      status: "pago"
-    },
-    {
-      id: "RES-154",
-      cliente: "Pedro Costa",
-      destino: "Fortaleza - CE", 
-      data: "01/03/2024",
-      valor: 3596,
-      status: "pago"
+  const confirmReservation = async (reservationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .update({ status: 'pago' })
+        .eq('id', reservationId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Reserva confirmada!",
+        description: "A reserva foi confirmada com sucesso",
+      });
+
+      // Recarregar dados do dashboard
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Erro ao confirmar reserva:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível confirmar a reserva",
+        variant: "destructive"
+      });
     }
-  ];
+  };
 
   const getStatusBadge = (status: string) => {
     const statusMap = {
@@ -105,9 +182,14 @@ const Admin = () => {
             </TabsList>
 
             <TabsContent value="dashboard" className="mt-8 space-y-8">
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <>
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">{/* ... keep existing code (stats cards) */}
           <Card className="glass-card p-6 border-0">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 glass-surface rounded-xl flex items-center justify-center">
@@ -249,14 +331,19 @@ const Admin = () => {
                     </div>
                     
                     <div className="flex gap-2">
-                      <Button size="sm" className="glass-button border-0 text-xs">
-                        Ver
-                      </Button>
-                      {reserva.status === "pendente" && (
-                        <Button size="sm" variant="outline" className="glass-surface border-glass-border/50 hover:glass-hover text-xs">
-                          Confirmar
-                        </Button>
-                      )}
+                          <Button size="sm" className="glass-button border-0 text-xs">
+                            Ver
+                          </Button>
+                          {reserva.status === "pendente" && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="glass-surface border-glass-border/50 hover:glass-hover text-xs"
+                              onClick={() => confirmReservation(reserva.reservationId)}
+                            >
+                              Confirmar
+                            </Button>
+                          )}
                     </div>
                   </div>
                 </div>
@@ -265,6 +352,8 @@ const Admin = () => {
           </div>
         </Card>
 
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="reservations" className="mt-8">

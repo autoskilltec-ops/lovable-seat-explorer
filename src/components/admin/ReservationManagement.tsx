@@ -70,6 +70,7 @@ const ReservationManagement = () => {
             )
           )
         `)
+        .not('user_id', 'is', null) // Apenas reservas com user_id (excluindo reservas administrativas)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -89,30 +90,53 @@ const ReservationManagement = () => {
   const confirmReservation = async (reservationId: string) => {
     setConfirming(reservationId);
     try {
-      // Atualizar status da reserva para "pago"
+      // Buscar a reserva para pegar os seat_ids antes de atualizar
+      const reservation = reservations.find(r => r.id === reservationId);
+      
+      // Atualizar status da reserva para "pago" com timestamp de aprovação
       const { error: reservationError } = await supabase
         .from('reservations')
-        .update({ status: 'pago' })
+        .update({ 
+          status: 'pago',
+          updated_at: new Date().toISOString()
+        })
         .eq('id', reservationId);
 
       if (reservationError) throw reservationError;
 
-      // Buscar a reserva para pegar os seat_ids
-      const reservation = reservations.find(r => r.id === reservationId);
+      // Atualizar assentos para ocupado usando os números dos assentos
       if (reservation?.seat_ids && reservation.seat_ids.length > 0) {
-        // Atualizar status dos assentos para "ocupado"
+        // Converter seat_ids de string para number para buscar por seat_number
+        const seatNumbers = reservation.seat_ids.map(seatId => parseInt(seatId));
+        
         const { error: seatsError } = await supabase
           .from('bus_seats')
-          .update({ status: 'ocupado' })
-          .in('id', reservation.seat_ids);
+          .update({ 
+            status: 'ocupado',
+            reserved_until: null // Remove reserva temporária
+          })
+          .in('seat_number', seatNumbers)
+          .eq('trip_id', reservation.trip.id);
 
-        if (seatsError) throw seatsError;
+        if (seatsError) {
+          console.error('Erro ao atualizar assentos:', seatsError);
+          toast({
+            title: "Aviso",
+            description: "Reserva confirmada, mas houve problema ao atualizar os assentos",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Reserva confirmada!",
+            description: `Reserva confirmada e assentos ${reservation.seat_ids.join(', ')} marcados como ocupados`,
+          });
+        }
+      } else {
+        toast({
+          title: "Reserva confirmada!",
+          description: "A reserva foi confirmada com sucesso",
+        });
       }
-
-      toast({
-        title: "Reserva confirmada!",
-        description: "A reserva foi confirmada e os assentos foram marcados como ocupados",
-      });
 
       fetchReservations();
     } catch (error) {
