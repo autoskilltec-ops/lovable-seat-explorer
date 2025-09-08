@@ -2,23 +2,128 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, Users, Clock, CheckCircle, XCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { useState } from "react";
 
 const MinhasReservas = () => {
-  // Mock data - será substituído por dados reais
-  const reservas = [
-    {
-      id: "RES-001",
-      destino: "Fortaleza - CE",
-      dataPartida: "15/02/2024",
-      dataRetorno: "18/02/2024", 
-      onibus: 1,
-      assento: 15,
-      plano: "Individual",
-      preco: 980,
-      status: "pago",
-      codigoConfirmacao: "FTL2024001"
-    }
-  ];
+  const { user } = useAuth();
+  const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const { data: reservas, isLoading, isError } = useQuery({
+    queryKey: ['minhas-reservas', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [] as any[];
+      const { data, error } = await supabase
+        .from('reservations')
+        .select(`
+          id,
+          plan_type,
+          passengers,
+          total_amount,
+          status,
+          codigo_confirmacao,
+          created_at,
+          trip:trips (
+            id,
+            departure_date,
+            return_date,
+            destination:destinations (
+              name,
+              state
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: selectedReservation, isLoading: isLoadingDetails } = useQuery({
+    queryKey: ['reserva-detalhes', selectedReservationId],
+    queryFn: async () => {
+      if (!selectedReservationId) return null as any;
+      const { data, error } = await supabase
+        .from('reservations')
+        .select(`
+          id,
+          plan_type,
+          passengers,
+          total_amount,
+          status,
+          codigo_confirmacao,
+          created_at,
+          customer_name,
+          customer_email,
+          customer_phone,
+          customer_cpf,
+          emergency_contact,
+          seat_ids,
+          trip:trips (
+            id,
+            departure_date,
+            return_date,
+            destination:destinations (
+              name,
+              state
+            )
+          )
+        `)
+        .eq('id', selectedReservationId)
+        .single();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!selectedReservationId,
+  });
+
+  const { data: payments } = useQuery({
+    queryKey: ['reserva-pagamentos', selectedReservationId],
+    queryFn: async () => {
+      if (!selectedReservationId) return [] as any[];
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`id, amount, method, status, created_at`)
+        .eq('reservation_id', selectedReservationId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!selectedReservationId,
+  });
+
+  const { data: seatNumbers } = useQuery({
+    queryKey: ['reserva-assentos', selectedReservationId, selectedReservation?.seat_ids?.join(',')],
+    queryFn: async () => {
+      if (!selectedReservationId) return [] as number[];
+      if (!selectedReservation?.seat_ids || selectedReservation.seat_ids.length === 0) return [] as number[];
+
+      // Tentar buscar por IDs na tabela bus_seats, retornando seat_number
+      const { data, error } = await supabase
+        .from('bus_seats')
+        .select('seat_number, id')
+        .in('id', selectedReservation.seat_ids as string[]);
+
+      if (!error && data) {
+        return data.map(s => Number(s.seat_number)).filter((n) => !Number.isNaN(n));
+      }
+
+      // Fallback: caso seat_ids já sejam números, apenas converte
+      const numeric = (selectedReservation.seat_ids as string[])
+        .map(v => Number(v))
+        .filter(n => !Number.isNaN(n));
+      return numeric;
+    },
+    enabled: !!selectedReservationId && Array.isArray(selectedReservation?.seat_ids),
+  });
 
   const getStatusBadge = (status: string) => {
     const statusMap = {
@@ -46,6 +151,12 @@ const MinhasReservas = () => {
     }).format(price);
   };
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('pt-BR');
+  };
+
   return (
     <div className="min-h-screen p-4">
       <div className="container mx-auto py-8">
@@ -59,10 +170,29 @@ const MinhasReservas = () => {
           </p>
         </div>
 
+        {/* Loading / Error States */}
+        {isLoading && (
+          <Card className="glass-card p-12 border-0 text-center">
+            <div className="space-y-4">
+              <Calendar className="h-8 w-8 text-muted-foreground mx-auto animate-pulse" />
+              <p className="text-lg text-muted-foreground">Carregando suas reservas...</p>
+            </div>
+          </Card>
+        )}
+
+        {isError && (
+          <Card className="glass-card p-12 border-0 text-center">
+            <div className="space-y-4">
+              <XCircle className="h-8 w-8 text-destructive mx-auto" />
+              <p className="text-lg text-muted-foreground">Não foi possível carregar suas reservas.</p>
+            </div>
+          </Card>
+        )}
+
         {/* Reservations List */}
-        {reservas.length > 0 ? (
+        {!isLoading && !isError && reservas && reservas.length > 0 ? (
           <div className="space-y-6">
-            {reservas.map((reserva) => (
+            {reservas.map((reserva: any) => (
               <Card key={reserva.id} className="glass-card p-6 border-0">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Trip Info */}
@@ -70,26 +200,25 @@ const MinhasReservas = () => {
                     <div className="flex items-center gap-2">
                       <MapPin className="h-5 w-5 text-primary" />
                       <h3 className="text-xl font-bold text-gradient">
-                        {reserva.destino}
+                        {reserva.trip?.destination?.name} - {reserva.trip?.destination?.state}
                       </h3>
                     </div>
                     
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">{reserva.dataPartida}</span>
+                        <span className="font-semibold">{formatDate(reserva.trip?.departure_date)}</span>
                       </div>
                       <span className="text-muted-foreground">até</span>
-                      <span className="font-semibold">{reserva.dataRetorno}</span>
+                      <span className="font-semibold">{formatDate(reserva.trip?.return_date)}</span>
                     </div>
 
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        Ônibus {reserva.onibus}
+                        Passageiros {reserva.passengers}
                       </div>
-                      <div>Assento {reserva.assento}</div>
-                      <div>{reserva.plano}</div>
+                      <div>Plano {reserva.plan_type}</div>
                     </div>
                   </div>
 
@@ -103,15 +232,15 @@ const MinhasReservas = () => {
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Valor Total</p>
                       <p className="text-2xl font-bold text-primary">
-                        {formatPrice(reserva.preco)}
+                        {formatPrice(Number(reserva.total_amount))}
                       </p>
                     </div>
 
-                    {reserva.codigoConfirmacao && (
+                    {reserva.codigo_confirmacao && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-1">Código de Confirmação</p>
                         <p className="font-mono font-semibold text-foreground">
-                          {reserva.codigoConfirmacao}
+                          {reserva.codigo_confirmacao}
                         </p>
                       </div>
                     )}
@@ -119,7 +248,7 @@ const MinhasReservas = () => {
 
                   {/* Actions */}
                   <div className="space-y-3">
-                    <Button className="w-full glass-button border-0">
+                    <Button className="w-full glass-button border-0" onClick={() => { setSelectedReservationId(reserva.id); setDetailsOpen(true); }}>
                       Ver Detalhes
                     </Button>
                     
@@ -169,6 +298,100 @@ const MinhasReservas = () => {
             </div>
           </Card>
         )}
+
+        {/* Details Dialog */}
+        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Detalhes da Reserva</DialogTitle>
+            </DialogHeader>
+            {isLoadingDetails ? (
+              <div className="py-6 text-center text-muted-foreground">Carregando...</div>
+            ) : selectedReservation ? (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold">Viagem</h3>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    <div>{selectedReservation.trip?.destination?.name} - {selectedReservation.trip?.destination?.state}</div>
+                    <div>Saída: {formatDate(selectedReservation.trip?.departure_date)} — Retorno: {formatDate(selectedReservation.trip?.return_date)}</div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">Reserva</h3>
+                    <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                      <div>Código: <span className="font-mono text-foreground">{selectedReservation.codigo_confirmacao}</span></div>
+                      <div>Status: <span className="text-foreground capitalize">{selectedReservation.status}</span></div>
+                      <div>Plano: <span className="text-foreground">{selectedReservation.plan_type}</span></div>
+                      <div>Passageiros: <span className="text-foreground">{selectedReservation.passengers}</span></div>
+                      <div>Valor Total: <span className="text-foreground">{formatPrice(Number(selectedReservation.total_amount))}</span></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold">Passageiro</h3>
+                    <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                      <div>Nome: <span className="text-foreground">{selectedReservation.customer_name}</span></div>
+                      {selectedReservation.customer_cpf && (<div>CPF: <span className="text-foreground">{selectedReservation.customer_cpf}</span></div>)}
+                      {selectedReservation.customer_email && (<div>Email: <span className="text-foreground">{selectedReservation.customer_email}</span></div>)}
+                      {selectedReservation.customer_phone && (<div>Telefone: <span className="text-foreground">{selectedReservation.customer_phone}</span></div>)}
+                      {selectedReservation.emergency_contact && (<div>Contato de Emergência: <span className="text-foreground">{selectedReservation.emergency_contact}</span></div>)}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-lg font-semibold">Assentos Selecionados</h3>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {seatNumbers && seatNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {seatNumbers.map((seat: number, idx: number) => (
+                          <span key={idx} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs">{seat}</span>
+                        ))}
+                      </div>
+                    ) : Array.isArray(selectedReservation?.seat_ids) && selectedReservation?.seat_ids.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedReservation?.seat_ids.map((seat: string, idx: number) => (
+                          <span key={idx} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-xs">{seat}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span>Nenhum assento especificado</span>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-lg font-semibold">Pagamentos</h3>
+                  <div className="mt-2 text-sm text-muted-foreground space-y-2">
+                    {payments && payments.length > 0 ? (
+                      payments.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between rounded-md border border-glass-border/50 px-3 py-2">
+                          <div>
+                            <div className="text-foreground">{formatPrice(Number(p.amount))}</div>
+                            <div className="text-xs">{new Date(p.created_at).toLocaleString('pt-BR')} • {p.method}</div>
+                          </div>
+                          <div className="text-xs capitalize">{p.status}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div>Nenhum pagamento registrado</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-muted-foreground">Reserva não encontrada.</div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Help Section */}
         <Card className="glass-card p-8 border-0 text-center mt-12">

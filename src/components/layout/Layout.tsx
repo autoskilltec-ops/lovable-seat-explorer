@@ -22,20 +22,7 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="flex items-center justify-between p-4 bg-card border-b border-border">
-        <Header />
-        {user && (
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={handleLogout}
-            className="flex items-center gap-2 glass-surface border-0 hover:glass-hover hover:bg-destructive/20 hover:text-destructive transition-all duration-200"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </Button>
-        )}
-      </div>
+      <Header />
       <main className="flex-1">
         {children}
       </main>

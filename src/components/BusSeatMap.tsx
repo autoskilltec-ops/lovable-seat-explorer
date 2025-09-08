@@ -28,7 +28,22 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     fetchSeats();
     // Clean expired holds every 30 seconds
     const interval = setInterval(cleanExpiredHolds, 30000);
-    return () => clearInterval(interval);
+    // Realtime: listen to seat updates for this trip and refresh UI
+    const channel = supabase.channel(`bus_seats_trip_${tripId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bus_seats',
+        filter: `trip_id=eq.${tripId}`
+      }, () => {
+        fetchSeats();
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [tripId]);
 
   const fetchSeats = async () => {

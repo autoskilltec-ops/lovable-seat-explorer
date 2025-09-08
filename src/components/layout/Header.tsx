@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { MapPin, User, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const { data: profile } = useQuery({
@@ -39,10 +40,15 @@ const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
+
   return (
-    <header className="glass-card sticky top-0 z-50 w-full border-0 border-b border-glass-border/30">
+    <header className="sticky top-0 z-50 w-full border-0">
       <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between glass-card border-0 border-glass-border/30 px-4 py-3" style={{ borderRadius: "5%" }}>
           {/* Logo */}
           <Link to="/home" className="flex items-center gap-2 group">
             <div className="flex items-center justify-center w-10 h-10 glass-surface rounded-xl group-hover:scale-105 transition-transform duration-200">
@@ -80,6 +86,17 @@ const Header = () => {
               <User className="h-4 w-4 mr-2" />
               Minha Conta
             </Button>
+
+            {user && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleLogout}
+                className="flex items-center gap-2 glass-surface border-0 hover:glass-hover hover:bg-destructive/20 hover:text-destructive transition-all duration-200"
+              >
+                Sair
+              </Button>
+            )}
 
             {/* Mobile Menu */}
             <Sheet>

@@ -104,18 +104,15 @@ const ReservationManagement = () => {
 
       if (reservationError) throw reservationError;
 
-      // Atualizar assentos para ocupado usando os números dos assentos
+      // Atualizar assentos para ocupado usando os IDs dos assentos salvos na reserva
       if (reservation?.seat_ids && reservation.seat_ids.length > 0) {
-        // Converter seat_ids de string para number para buscar por seat_number
-        const seatNumbers = reservation.seat_ids.map(seatId => parseInt(seatId));
-        
         const { error: seatsError } = await supabase
           .from('bus_seats')
           .update({ 
             status: 'ocupado',
             reserved_until: null // Remove reserva temporária
           })
-          .in('seat_number', seatNumbers)
+          .in('id', reservation.seat_ids)
           .eq('trip_id', reservation.trip.id);
 
         if (seatsError) {
