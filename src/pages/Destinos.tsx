@@ -45,6 +45,14 @@ export default function Destinos() {
     image_url: ""
   });
 
+  const [newTrip, setNewTrip] = useState({
+    departure_date: "",
+    return_date: "",
+    price_individual: "",
+    price_couple: "",
+    price_group: ""
+  });
+
   useEffect(() => {
     fetchTrips();
     if (user) {
@@ -103,22 +111,49 @@ export default function Destinos() {
     if (!newDestination.name || !newDestination.state || !newDestination.description) {
       toast({
         title: "Erro",
-        description: "Todos os campos obrigatórios devem ser preenchidos.",
+        description: "Todos os campos obrigatórios do destino devem ser preenchidos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!newTrip.departure_date || !newTrip.return_date || 
+        !newTrip.price_individual || !newTrip.price_couple || !newTrip.price_group) {
+      toast({
+        title: "Erro", 
+        description: "Todos os campos da viagem devem ser preenchidos.",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const { error } = await supabase
+      // Criar destino primeiro
+      const { data: destinationData, error: destinationError } = await supabase
         .from("destinations")
-        .insert([newDestination]);
+        .insert([newDestination])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (destinationError) throw destinationError;
+
+      // Criar viagem associada ao destino
+      const { error: tripError } = await supabase
+        .from("trips")
+        .insert([{
+          destination_id: destinationData.id,
+          departure_date: newTrip.departure_date,
+          return_date: newTrip.return_date,
+          price_individual: parseFloat(newTrip.price_individual),
+          price_couple: parseFloat(newTrip.price_couple),
+          price_group: parseFloat(newTrip.price_group)
+        }]);
+
+      if (tripError) throw tripError;
 
       toast({
         title: "Sucesso",
-        description: "Destino criado com sucesso!",
+        description: "Destino e viagem criados com sucesso!",
       });
 
       setNewDestination({
@@ -127,13 +162,20 @@ export default function Destinos() {
         description: "",
         image_url: ""
       });
+      setNewTrip({
+        departure_date: "",
+        return_date: "",
+        price_individual: "",
+        price_couple: "",
+        price_group: ""
+      });
       setIsDialogOpen(false);
-      fetchTrips();
+      fetchTrips(); // Recarregar dados para mostrar o novo destino
     } catch (error) {
       console.error("Erro ao criar destino:", error);
       toast({
         title: "Erro",
-        description: "Erro ao criar destino. Tente novamente.",
+        description: "Erro ao criar destino e viagem. Tente novamente.",
         variant: "destructive",
       });
     }
@@ -298,49 +340,116 @@ export default function Destinos() {
                 Novo Destino
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Criar Novo Destino</DialogTitle>
+                <DialogTitle>Criar Novo Destino e Viagem</DialogTitle>
                 <DialogDescription>
-                  Preencha as informações do novo destino abaixo.
+                  Preencha as informações do destino e da primeira viagem disponível.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={newDestination.name}
-                    onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
-                    placeholder="Ex: Fortaleza"
-                  />
+              <div className="grid gap-6 py-4">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Informações do Destino</h3>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="name">Nome *</Label>
+                      <Input
+                        id="name"
+                        value={newDestination.name}
+                        onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
+                        placeholder="Ex: Fortaleza"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="state">Estado *</Label>
+                      <Input
+                        id="state"
+                        value={newDestination.state}
+                        onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
+                        placeholder="Ex: CE"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Descrição *</Label>
+                      <Textarea
+                        id="description"
+                        value={newDestination.description}
+                        onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
+                        placeholder="Descreva o destino..."
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="image_url">URL da Imagem</Label>
+                      <Input
+                        id="image_url"
+                        value={newDestination.image_url}
+                        onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
+                        placeholder="https://exemplo.com/imagem.jpg"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="state">Estado *</Label>
-                  <Input
-                    id="state"
-                    value={newDestination.state}
-                    onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
-                    placeholder="Ex: CE"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Descrição *</Label>
-                  <Textarea
-                    id="description"
-                    value={newDestination.description}
-                    onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
-                    placeholder="Descreva o destino..."
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="image_url">URL da Imagem</Label>
-                  <Input
-                    id="image_url"
-                    value={newDestination.image_url}
-                    onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
-                    placeholder="https://exemplo.com/imagem.jpg"
-                  />
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Informações da Viagem</h3>
+                  <div className="grid gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="departure_date">Data de Saída *</Label>
+                        <Input
+                          id="departure_date"
+                          type="date"
+                          value={newTrip.departure_date}
+                          onChange={(e) => setNewTrip({...newTrip, departure_date: e.target.value})}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="return_date">Data de Retorno *</Label>
+                        <Input
+                          id="return_date"
+                          type="date"
+                          value={newTrip.return_date}
+                          onChange={(e) => setNewTrip({...newTrip, return_date: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_individual">Preço Individual *</Label>
+                        <Input
+                          id="price_individual"
+                          type="number"
+                          step="0.01"
+                          value={newTrip.price_individual}
+                          onChange={(e) => setNewTrip({...newTrip, price_individual: e.target.value})}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_couple">Preço Casal *</Label>
+                        <Input
+                          id="price_couple"
+                          type="number"
+                          step="0.01"
+                          value={newTrip.price_couple}
+                          onChange={(e) => setNewTrip({...newTrip, price_couple: e.target.value})}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_group">Preço Grupo *</Label>
+                        <Input
+                          id="price_group"
+                          type="number"
+                          step="0.01"
+                          value={newTrip.price_group}
+                          onChange={(e) => setNewTrip({...newTrip, price_group: e.target.value})}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end gap-2">
@@ -348,7 +457,7 @@ export default function Destinos() {
                   Cancelar
                 </Button>
                 <Button onClick={handleCreateDestination}>
-                  Criar Destino
+                  Criar Destino e Viagem
                 </Button>
               </div>
             </DialogContent>
