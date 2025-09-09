@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, ArrowLeft } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Calendar, MapPin, Users, ArrowLeft, Plus } from "lucide-react";
 
 interface Destination {
   id: string;
@@ -25,13 +31,43 @@ interface Trip {
 }
 
 export default function Destinos() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newDestination, setNewDestination] = useState({
+    name: "",
+    state: "",
+    description: "",
+    image_url: ""
+  });
 
   useEffect(() => {
     fetchTrips();
-  }, []);
+    if (user) {
+      checkAdminStatus();
+    }
+  }, [user]);
+
+  const checkAdminStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) throw error;
+      setIsAdmin(data?.role === "admin");
+    } catch (error) {
+      console.error("Erro ao verificar status de admin:", error);
+    }
+  };
 
   const fetchTrips = async () => {
     try {
@@ -61,6 +97,46 @@ export default function Destinos() {
       style: "currency",
       currency: "BRL",
     }).format(price);
+  };
+
+  const handleCreateDestination = async () => {
+    if (!newDestination.name || !newDestination.state || !newDestination.description) {
+      toast({
+        title: "Erro",
+        description: "Todos os campos obrigatórios devem ser preenchidos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("destinations")
+        .insert([newDestination]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Destino criado com sucesso!",
+      });
+
+      setNewDestination({
+        name: "",
+        state: "",
+        description: "",
+        image_url: ""
+      });
+      setIsDialogOpen(false);
+      fetchTrips();
+    } catch (error) {
+      console.error("Erro ao criar destino:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar destino. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Agrupar viagens por destino
@@ -206,11 +282,78 @@ export default function Destinos() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Destinos Disponíveis</h1>
-        <p className="text-muted-foreground">
-          Escolha seu próximo destino para ver as datas disponíveis
-        </p>
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Destinos Disponíveis</h1>
+          <p className="text-muted-foreground">
+            Escolha seu próximo destino para ver as datas disponíveis
+          </p>
+        </div>
+        
+        {isAdmin && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Destino
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Criar Novo Destino</DialogTitle>
+                <DialogDescription>
+                  Preencha as informações do novo destino abaixo.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Nome *</Label>
+                  <Input
+                    id="name"
+                    value={newDestination.name}
+                    onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
+                    placeholder="Ex: Fortaleza"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="state">Estado *</Label>
+                  <Input
+                    id="state"
+                    value={newDestination.state}
+                    onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
+                    placeholder="Ex: CE"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="description">Descrição *</Label>
+                  <Textarea
+                    id="description"
+                    value={newDestination.description}
+                    onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
+                    placeholder="Descreva o destino..."
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="image_url">URL da Imagem</Label>
+                  <Input
+                    id="image_url"
+                    value={newDestination.image_url}
+                    onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleCreateDestination}>
+                  Criar Destino
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
