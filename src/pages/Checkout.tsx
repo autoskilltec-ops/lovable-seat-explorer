@@ -192,13 +192,16 @@ export default function Checkout() {
           reservation_id: reservation.id,
         });
 
-      // Enviar para WhatsApp
+      // Enviar para WhatsApp e redirecionar para Minhas Reservas
       await sendToWhatsApp(reservation);
 
       toast({
         title: "Reserva criada com sucesso!",
-        description: "Você será redirecionado para o WhatsApp",
+        description: "Abrindo WhatsApp e redirecionando para Minhas Reservas...",
       });
+
+      // Navega para a página de Minhas Reservas para exibir a reserva pendente
+      navigate("/minhas-reservas");
 
     } catch (error: any) {
       console.error("Erro ao criar reserva:", error);
@@ -302,7 +305,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       <Button
         variant="ghost"
         onClick={() => navigate("/destinos")}
@@ -312,7 +315,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
         Voltar aos Destinos
       </Button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Resumo da Viagem */}
         <Card>
           <CardHeader>
@@ -366,7 +369,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
         />
 
         {/* Formulário */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Dados da Reserva</CardTitle>
             <CardDescription>
@@ -375,7 +378,10 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmitWithValidation} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Plano e Passageiros</h4>
+                </div>
                 <div>
                   <Label htmlFor="planType">Plano da Viagem</Label>
                   <RadioGroup
@@ -416,8 +422,11 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="customerName">Nome Completo</Label>
+                <div className="md:col-span-2 pt-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Informações do Responsável</h4>
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="customerName">Nome completo do Responsável</Label>
                   <Input
                     id="customerName"
                     value={formData.customerName}
@@ -425,52 +434,55 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
                     required
                   />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="customerPhone">Telefone</Label>
-                    <Input
-                      id="customerPhone"
-                      type="tel"
-                      value={formData.customerPhone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="customerEmail">Email</Label>
-                    <Input
-                      id="customerEmail"
-                      type="email"
-                      value={formData.customerEmail}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customerEmail: e.target.value }))}
-                      required
-                    />
-                  </div>
+                <div className="md:col-span-2 pt-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Contato</h4>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="customerCpf">CPF</Label>
-                    <Input
-                      id="customerCpf"
-                      value={formData.customerCpf}
-                      onChange={(e) => setFormData(prev => ({ ...prev, customerCpf: e.target.value }))}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="emergencyContact">Contato de Emergência</Label>
-                    <Input
-                      id="emergencyContact"
-                      value={formData.emergencyContact}
-                      onChange={(e) => setFormData(prev => ({ ...prev, emergencyContact: e.target.value }))}
-                      required
-                    />
-                  </div>
-                </div>
-
                 <div>
+                  <Label htmlFor="customerPhone">Telefone</Label>
+                  <Input
+                    id="customerPhone"
+                    type="tel"
+                    value={formData.customerPhone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="customerEmail">Email</Label>
+                  <Input
+                    id="customerEmail"
+                    type="email"
+                    value={formData.customerEmail}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerEmail: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="md:col-span-2 pt-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Documentos e Emergência</h4>
+                </div>
+                <div>
+                  <Label htmlFor="customerCpf">CPF</Label>
+                  <Input
+                    id="customerCpf"
+                    value={formData.customerCpf}
+                    onChange={(e) => setFormData(prev => ({ ...prev, customerCpf: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="emergencyContact">Contato de Emergência</Label>
+                  <Input
+                    id="emergencyContact"
+                    value={formData.emergencyContact}
+                    onChange={(e) => setFormData(prev => ({ ...prev, emergencyContact: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2 pt-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Pagamento e Observações</h4>
+                </div>
+                <div className="md:col-span-2">
                   <Label>Método de Pagamento Preferido</Label>
                   <RadioGroup
                     value={formData.paymentMethod}
@@ -491,7 +503,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
                   </RadioGroup>
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <Label htmlFor="observations">Observações (opcional)</Label>
                   <Textarea
                     id="observations"

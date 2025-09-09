@@ -8,9 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 const MinhasReservas = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -270,12 +274,32 @@ const MinhasReservas = () => {
                     )}
                     
                     {reserva.status === "pendente" && (
-                      <Button 
-                        variant="outline" 
-                        className="w-full glass-surface border-glass-border/50 hover:glass-hover"
-                      >
-                        Finalizar Pagamento
-                      </Button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <Button 
+                          variant="outline" 
+                          className="w-full glass-surface border-glass-border/50 hover:glass-hover"
+                        >
+                          Finalizar Pagamento
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="w-full glass-surface border-glass-border/50 hover:glass-hover text-destructive"
+                          onClick={async () => {
+                            const { error } = await supabase
+                              .from('reservations')
+                              .update({ status: 'cancelado' })
+                              .eq('id', reserva.id);
+                            if (error) {
+                              toast({ title: 'Erro', description: 'Não foi possível cancelar a reserva.', variant: 'destructive' });
+                            } else {
+                              toast({ title: 'Reserva cancelada', description: 'Os assentos foram liberados.' });
+                              queryClient.invalidateQueries({ queryKey: ['minhas-reservas', user?.id] });
+                            }
+                          }}
+                        >
+                          Cancelar Reserva
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
