@@ -38,6 +38,7 @@ export default function Destinos() {
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
   const [newDestination, setNewDestination] = useState({
     name: "",
     state: "",
@@ -46,6 +47,14 @@ export default function Destinos() {
   });
 
   const [newTrip, setNewTrip] = useState({
+    departure_date: "",
+    return_date: "",
+    price_individual: "",
+    price_couple: "",
+    price_group: ""
+  });
+
+  const [newTripForDestination, setNewTripForDestination] = useState({
     departure_date: "",
     return_date: "",
     price_individual: "",
@@ -181,6 +190,57 @@ export default function Destinos() {
     }
   };
 
+  const handleCreateTripForDestination = async () => {
+    if (!selectedDestination) return;
+
+    if (!newTripForDestination.departure_date || !newTripForDestination.return_date ||
+        !newTripForDestination.price_individual || !newTripForDestination.price_couple || !newTripForDestination.price_group) {
+      toast({
+        title: "Erro",
+        description: "Preencha todas as informações da nova viagem.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .insert([{ 
+          destination_id: selectedDestination.id,
+          departure_date: newTripForDestination.departure_date,
+          return_date: newTripForDestination.return_date,
+          price_individual: parseFloat(newTripForDestination.price_individual),
+          price_couple: parseFloat(newTripForDestination.price_couple),
+          price_group: parseFloat(newTripForDestination.price_group)
+        }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Nova data adicionada ao destino!",
+      });
+
+      setNewTripForDestination({
+        departure_date: "",
+        return_date: "",
+        price_individual: "",
+        price_couple: "",
+        price_group: ""
+      });
+      setIsAddTripDialogOpen(false);
+      await fetchTrips();
+    } catch (error) {
+      console.error("Erro ao criar viagem:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível criar a nova viagem.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Agrupar viagens por destino
   const groupedByDestination = trips.reduce((acc, trip) => {
     const destinationId = trip.destination.id;
@@ -241,6 +301,91 @@ export default function Destinos() {
           <Badge variant="secondary" className="text-sm">
             {selectedDestination.state}
           </Badge>
+
+          {isAdmin && (
+            <div className="mt-4">
+              <Dialog open={isAddTripDialogOpen} onOpenChange={setIsAddTripDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-primary/90">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Data
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px]">
+                  <DialogHeader>
+                    <DialogTitle>Nova data para {selectedDestination.name}</DialogTitle>
+                    <DialogDescription>
+                      Cadastre uma nova data mantendo o mesmo destino.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-6 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="departure_date_new">Data de Saída *</Label>
+                        <Input
+                          id="departure_date_new"
+                          type="date"
+                          value={newTripForDestination.departure_date}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, departure_date: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="return_date_new">Data de Retorno *</Label>
+                        <Input
+                          id="return_date_new"
+                          type="date"
+                          value={newTripForDestination.return_date}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, return_date: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_individual_new">Preço Individual *</Label>
+                        <Input
+                          id="price_individual_new"
+                          type="number"
+                          step="0.01"
+                          value={newTripForDestination.price_individual}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_individual: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_couple_new">Preço Casal *</Label>
+                        <Input
+                          id="price_couple_new"
+                          type="number"
+                          step="0.01"
+                          value={newTripForDestination.price_couple}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_couple: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="price_group_new">Preço Grupo *</Label>
+                        <Input
+                          id="price_group_new"
+                          type="number"
+                          step="0.01"
+                          value={newTripForDestination.price_group}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_group: e.target.value })}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsAddTripDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button onClick={handleCreateTripForDestination}>Salvar Data</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
