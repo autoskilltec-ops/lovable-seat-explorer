@@ -177,15 +177,18 @@ const ReservationManagement = () => {
             confirmationCode: reservation.codigo_confirmacao
           };
 
-          const { error: emailError } = await supabase.functions.invoke('send-reservation-confirmation', {
+          const { data: emailResp, error: emailError } = await supabase.functions.invoke('send-reservation-confirmation', {
             body: { reservationData }
           });
 
-          if (emailError) {
-            console.error('Erro ao enviar e-mail:', emailError);
+          const resendError = (emailResp as any)?.error;
+
+          if (emailError || resendError) {
+            console.error('Erro ao enviar e-mail:', emailError || resendError);
+            const msg = resendError?.error || (typeof resendError === 'string' ? resendError : 'Falha ao enviar e-mail');
             toast({
               title: 'Reserva confirmada!',
-              description: 'Reserva confirmada, mas não foi possível enviar o e-mail de confirmação',
+              description: `Reserva confirmada, mas não foi possível enviar o e-mail: ${msg}`,
               variant: 'destructive'
             });
           } else {

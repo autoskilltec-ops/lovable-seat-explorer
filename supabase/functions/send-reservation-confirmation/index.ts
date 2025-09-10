@@ -3,9 +3,10 @@ import { Resend } from "npm:resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "onboarding@resend.dev";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": window?.location?.origin || "*",
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -71,11 +72,20 @@ const handler = async (req: Request): Promise<Response> => {
     const emailHtml = generateEmailTemplate(reservationData);
 
     const emailResponse = await resend.emails.send({
-      from: "Confirmação de Reserva <onboarding@resend.dev>",
+      from: `Confirmação de Reserva <${FROM_EMAIL}>`,
       to: [reservationData.customerEmail],
       subject: `Reserva Confirmada - ${reservationData.tripDestination} - Código: ${reservationData.confirmationCode}`,
       html: emailHtml,
     });
+
+    if ((emailResponse as any)?.error) {
+      console.error("Resend error while sending email:", (emailResponse as any).error);
+      const statusCode = (emailResponse as any).error?.statusCode ?? 500;
+      return new Response(JSON.stringify(emailResponse), {
+        status: statusCode,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
 
     console.log("Email sent successfully:", emailResponse);
 
