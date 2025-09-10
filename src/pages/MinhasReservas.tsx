@@ -267,6 +267,29 @@ const MinhasReservas = () => {
                         <Button 
                           variant="outline" 
                           className="w-full glass-surface border-glass-border/50 hover:glass-hover text-destructive"
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from('reservations')
+                                .update({ status: 'cancelado' })
+                                .eq('id', reserva.id);
+                              
+                              if (error) throw error;
+                              
+                              toast({ 
+                                title: 'Reserva cancelada com sucesso', 
+                                description: '✅ Reserva cancelada com sucesso.' 
+                              });
+                              queryClient.invalidateQueries({ queryKey: ['minhas-reservas', user?.id] });
+                            } catch (error) {
+                              console.error('Erro ao cancelar reserva:', error);
+                              toast({ 
+                                title: 'Erro', 
+                                description: '❌ Não foi possível cancelar a reserva, tente novamente.', 
+                                variant: 'destructive' 
+                              });
+                            }
+                          }}
                         >
                           Cancelar Reserva
                         </Button>
@@ -285,15 +308,26 @@ const MinhasReservas = () => {
                           variant="outline" 
                           className="w-full glass-surface border-glass-border/50 hover:glass-hover text-destructive"
                           onClick={async () => {
-                            const { error } = await supabase
-                              .from('reservations')
-                              .update({ status: 'cancelado' })
-                              .eq('id', reserva.id);
-                            if (error) {
-                              toast({ title: 'Erro', description: 'Não foi possível cancelar a reserva.', variant: 'destructive' });
-                            } else {
-                              toast({ title: 'Reserva cancelada', description: 'Os assentos foram liberados.' });
+                            try {
+                              const { error } = await supabase
+                                .from('reservations')
+                                .update({ status: 'cancelado' })
+                                .eq('id', reserva.id);
+                              
+                              if (error) throw error;
+                              
+                              toast({ 
+                                title: 'Reserva cancelada com sucesso', 
+                                description: '✅ Reserva cancelada com sucesso.' 
+                              });
                               queryClient.invalidateQueries({ queryKey: ['minhas-reservas', user?.id] });
+                            } catch (error) {
+                              console.error('Erro ao cancelar reserva:', error);
+                              toast({ 
+                                title: 'Erro', 
+                                description: '❌ Não foi possível cancelar a reserva, tente novamente.', 
+                                variant: 'destructive' 
+                              });
                             }
                           }}
                         >

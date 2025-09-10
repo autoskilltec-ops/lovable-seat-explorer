@@ -48,6 +48,7 @@ const ReservationManagement = () => {
   const [selectedDestination, setSelectedDestination] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -145,6 +146,37 @@ const ReservationManagement = () => {
       });
     } finally {
       setConfirming(null);
+    }
+  };
+
+  const cancelReservation = async (reservationId: string) => {
+    setCanceling(reservationId);
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .update({ 
+          status: 'cancelado',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reservationId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Reserva cancelada!",
+        description: "✅ Reserva cancelada com sucesso.",
+      });
+
+      fetchReservations();
+    } catch (error) {
+      console.error('Erro ao cancelar reserva:', error);
+      toast({
+        title: "Erro",
+        description: "❌ Não foi possível cancelar a reserva, tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setCanceling(null);
     }
   };
 
@@ -308,6 +340,15 @@ const ReservationManagement = () => {
                           >
                             {confirming === reservation.id ? "Confirmando..." : "Confirmar Reserva"}
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => cancelReservation(reservation.id)}
+                            disabled={canceling === reservation.id}
+                            className="glass-surface border-glass-border/50 hover:glass-hover text-destructive"
+                          >
+                            {canceling === reservation.id ? "Cancelando..." : "Cancelar Reserva"}
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -370,6 +411,17 @@ const ReservationManagement = () => {
                             {confirming === reservation.id ? "Confirmando..." : "Confirmar"}
                           </Button>
                         )}
+                        {reservation.status !== 'cancelado' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => cancelReservation(reservation.id)}
+                            disabled={canceling === reservation.id}
+                            className="glass-surface border-glass-border/50 hover:glass-hover text-destructive"
+                          >
+                            {canceling === reservation.id ? "Cancelando..." : "Cancelar"}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -416,6 +468,17 @@ const ReservationManagement = () => {
                           className="glass-button border-0 text-xs"
                         >
                           {confirming === reservation.id ? "Confirmando..." : "Confirmar"}
+                        </Button>
+                      )}
+                      {reservation.status !== 'cancelado' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => cancelReservation(reservation.id)}
+                          disabled={canceling === reservation.id}
+                          className="glass-surface border-glass-border/50 hover:glass-hover text-destructive text-xs"
+                        >
+                          {canceling === reservation.id ? "Cancelando..." : "Cancelar"}
                         </Button>
                       )}
                     </div>
