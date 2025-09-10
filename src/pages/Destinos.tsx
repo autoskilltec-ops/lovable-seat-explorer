@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, MapPin, Users, ArrowLeft, Plus } from "lucide-react";
 
@@ -59,7 +60,8 @@ export default function Destinos() {
     return_date: "",
     price_individual: "",
     price_couple: "",
-    price_group: ""
+    price_group: "",
+    bus_quantity: "1"
   });
 
   useEffect(() => {
@@ -221,15 +223,23 @@ export default function Destinos() {
 
       if (tripError) throw tripError;
 
-      // Create buses for this trip
+      // Create buses for this trip with bus_quantity
       const busQuantity = parseInt(newTripForDestination.bus_quantity);
+      const { data: tripWithBusData, error: tripWithBusError } = await supabase
+        .from("trips")
+        .update({ bus_quantity: busQuantity })
+        .eq("id", tripData.id);
+
+      if (tripWithBusError) console.warn("Bus quantity update warning:", tripWithBusError);
+
+      // Create buses for this trip
       const busesToCreate = Array.from({ length: busQuantity }, (_, i) => ({
         trip_id: tripData.id,
         bus_number: i + 1
       }));
 
       const { data: busesData, error: busesError } = await supabase
-        .from("buses")
+        .from("buses" as any)
         .insert(busesToCreate)
         .select();
 
@@ -237,7 +247,7 @@ export default function Destinos() {
 
       // Create 60 seats for each bus
       const seatsToCreate = [];
-      for (const bus of busesData) {
+      for (const bus of (busesData as any)) {
         for (let seatNum = 1; seatNum <= 60; seatNum++) {
           seatsToCreate.push({
             trip_id: tripData.id,
@@ -412,6 +422,20 @@ export default function Destinos() {
                           placeholder="0.00"
                         />
                       </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="bus_quantity_new">Quantidade de Ônibus *</Label>
+                      <select
+                        id="bus_quantity_new"
+                        value={newTripForDestination.bus_quantity}
+                        onChange={(e) => setNewTripForDestination({ ...newTripForDestination, bus_quantity: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="1">1 Ônibus (60 assentos)</option>
+                        <option value="2">2 Ônibus (120 assentos)</option>
+                        <option value="3">3 Ônibus (180 assentos)</option>
+                      </select>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2">

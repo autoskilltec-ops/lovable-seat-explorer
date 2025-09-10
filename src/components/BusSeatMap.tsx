@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,15 @@ interface BusSeat {
   seat_number: number;
   status: 'disponivel' | 'ocupado' | 'reservado_temporario';
   reserved_until?: string;
+  bus_id?: string;
+}
+
+interface Bus {
+  bus_id: string;
+  bus_number: number;
+  total_seats: number;
+  available_seats: number;
+  occupied_seats: number;
 }
 
 interface BusSeatMapProps {
@@ -21,13 +31,16 @@ interface BusSeatMapProps {
 
 export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection }: BusSeatMapProps) {
   const [seats, setSeats] = useState<BusSeat[]>([]);
+  const [buses, setBuses] = useState<Bus[]>([]);
+  const [selectedBusId, setSelectedBusId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchSeats();
+    fetchBusesAndData();
     // Clean expired holds every 30 seconds
     const interval = setInterval(cleanExpiredHolds, 30000);
+    
     // Realtime: listen to seat updates for this trip and refresh UI
     const channel = supabase.channel(`bus_seats_trip_${tripId}`)
       .on('postgres_changes', {
@@ -36,7 +49,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         table: 'bus_seats',
         filter: `trip_id=eq.${tripId}`
       }, () => {
-        fetchSeats();
+        fetchBusesAndData();
       })
       .subscribe();
 
@@ -46,7 +59,62 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     };
   }, [tripId]);
 
-  const fetchSeats = async () => {
+  // When bus selection changes, fetch seats for that bus
+  useEffect(() => {
+    if (selectedBusId) {
+      fetchSeatsForBus(selectedBusId);
+    }
+  }, [selectedBusId]);
+
+  const fetchBusesAndData = async () => {
+    try {
+      // Fetch buses for this trip using the custom function
+      const { data: busData, error: busError } = await supabase
+        .rpc('get_trip_buses', { trip_uuid: tripId });
+
+      if (busError) throw busError;
+
+      setBuses(busData || []);
+      
+      // Select first bus by default if none selected and buses exist
+      if (busData && busData.length > 0 && !selectedBusId) {
+        setSelectedBusId(busData[0].bus_id);
+      }
+    } catch (error) {
+      console.error("Error fetching buses:", error);
+      // If the function doesn't exist (old trips), fall back to simple seat loading
+      await fallbackFetchSeats();
+    }
+  };
+
+  const fetchSeatsForBus = async (busId: string) => {
+    if (!busId) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("bus_seats")
+        .select("*")
+        .eq("bus_id", busId)
+        .order("seat_number");
+
+      if (error) throw error;
+
+      setSeats(data || []);
+    } catch (error) {
+      console.error("Error fetching seats for bus:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar assentos do ônibus",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fallback for old trips without buses table
+  const fallbackFetchSeats = async () => {
     try {
       const { data, error } = await supabase
         .from("bus_seats")
@@ -131,43 +199,19 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   const cleanExpiredHolds = async () => {
     try {
       await supabase.rpc('clean_expired_seat_holds');
-      fetchSeats(); // Refresh seats after cleaning
+      // Refresh current bus data
+      if (selectedBusId) {
+        fetchSeatsForBus(selectedBusId);
+      } else {
+        fallbackFetchSeats();
+      }
+      fetchBusesAndData(); // Update bus occupancy stats
     } catch (error) {
       console.error("Erro ao limpar reservas expiradas:", error);
     }
   };
 
   const handleSeatClick = async (seat: BusSeat) => {
-    // If this is a virtual seat (not yet in DB), create it first
-    if (String(seat.id).startsWith("virtual-")) {
-      try {
-        const { data, error } = await supabase
-          .from("bus_seats")
-          .insert({ trip_id: tripId, seat_number: seat.seat_number, status: 'disponivel' })
-          .select()
-          .single();
-        if (error) throw error;
-        if (data) {
-          await fetchSeats();
-          // After creating, proceed as if the user clicked the real seat
-          await handleSeatClick({
-            id: data.id,
-            seat_number: data.seat_number,
-            status: data.status,
-            reserved_until: data.reserved_until,
-          });
-        }
-      } catch (error) {
-        console.error("Erro ao criar assento:", error);
-        toast({
-          title: "Erro",
-          description: "Não foi possível criar o assento.",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
     if (seat.status === 'ocupado') return;
 
     const isSelected = selectedSeats.includes(seat.id);
@@ -221,7 +265,14 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     }
 
     onSeatSelection(newSelectedSeats);
-    fetchSeats(); // Refresh to show updated status
+    // Refresh seats to show updated status
+    if (selectedBusId) {
+      fetchSeatsForBus(selectedBusId);
+    } else {
+      fallbackFetchSeats();
+    }
+    // Update bus stats
+    fetchBusesAndData();
   };
 
   const getSeatColor = (seat: BusSeat) => {
@@ -372,7 +423,56 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
           )}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Bus Selection */}
+        {buses.length > 1 && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Selecione o Ônibus:</label>
+            <Select value={selectedBusId} onValueChange={setSelectedBusId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Escolha um ônibus" />
+              </SelectTrigger>
+              <SelectContent>
+                {buses.map((bus) => (
+                  <SelectItem key={bus.bus_id} value={bus.bus_id}>
+                    Ônibus {bus.bus_number} - {bus.available_seats} assentos disponíveis
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Bus Info */}
+        {buses.length > 0 && selectedBusId && (
+          <div className="glass-surface p-4 rounded-lg border border-glass-border/30">
+            {(() => {
+              const currentBus = buses.find(b => b.bus_id === selectedBusId);
+              if (!currentBus) return null;
+              
+              return (
+                <>
+                  <h3 className="font-semibold mb-2">Ônibus {currentBus.bus_number}</h3>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Total:</span>
+                      <span className="ml-2 font-medium">{currentBus.total_seats}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Disponíveis:</span>
+                      <span className="ml-2 font-medium text-success">{currentBus.available_seats}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Ocupados:</span>
+                      <span className="ml-2 font-medium text-destructive">{currentBus.occupied_seats}</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
         {renderBusLayout()}
       </CardContent>
     </Card>

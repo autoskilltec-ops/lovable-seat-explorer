@@ -49,6 +49,7 @@ export type Database = {
       }
       bus_seats: {
         Row: {
+          bus_id: string | null
           created_at: string | null
           id: string
           reserved_until: string | null
@@ -57,6 +58,7 @@ export type Database = {
           trip_id: string
         }
         Insert: {
+          bus_id?: string | null
           created_at?: string | null
           id?: string
           reserved_until?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           trip_id: string
         }
         Update: {
+          bus_id?: string | null
           created_at?: string | null
           id?: string
           reserved_until?: string | null
@@ -74,7 +77,43 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "bus_seats_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "buses"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bus_seats_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      buses: {
+        Row: {
+          bus_number: number
+          created_at: string | null
+          id: string
+          trip_id: string
+        }
+        Insert: {
+          bus_number: number
+          created_at?: string | null
+          id?: string
+          trip_id: string
+        }
+        Update: {
+          bus_number?: number
+          created_at?: string | null
+          id?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buses_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "trips"
@@ -271,6 +310,7 @@ export type Database = {
       }
       trips: {
         Row: {
+          bus_quantity: number
           created_at: string | null
           departure_date: string
           destination_id: string
@@ -284,6 +324,7 @@ export type Database = {
           return_date: string
         }
         Insert: {
+          bus_quantity?: number
           created_at?: string | null
           departure_date: string
           destination_id: string
@@ -297,6 +338,7 @@ export type Database = {
           return_date: string
         }
         Update: {
+          bus_quantity?: number
           created_at?: string | null
           departure_date?: string
           destination_id?: string
@@ -324,6 +366,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _free_seats: {
+        Args: { seat_ids: string[] }
+        Returns: undefined
+      }
       clean_expired_seat_holds: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -332,12 +378,22 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_trip_buses: {
+        Args: { trip_uuid: string }
+        Returns: {
+          available_seats: number
+          bus_id: string
+          bus_number: number
+          occupied_seats: number
+          total_seats: number
+        }[]
+      }
     }
     Enums: {
       payment_method: "pix" | "cartao"
       payment_preference: "pix" | "cartao_credito" | "cartao_debito"
       payment_status: "iniciado" | "aprovado" | "recusado" | "cancelado"
-      reservation_status: "pendente" | "pago" | "cancelado"
+      reservation_status: "pendente" | "pago" | "cancelado" | '""'
       seat_status: "disponivel" | "reservado_temporario" | "ocupado"
       user_role: "user" | "admin"
     }
@@ -470,7 +526,7 @@ export const Constants = {
       payment_method: ["pix", "cartao"],
       payment_preference: ["pix", "cartao_credito", "cartao_debito"],
       payment_status: ["iniciado", "aprovado", "recusado", "cancelado"],
-      reservation_status: ["pendente", "pago", "cancelado"],
+      reservation_status: ["pendente", "pago", "cancelado", '""'],
       seat_status: ["disponivel", "reservado_temporario", "ocupado"],
       user_role: ["user", "admin"],
     },
