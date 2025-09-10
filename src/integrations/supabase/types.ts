@@ -388,6 +388,14 @@ export type Database = {
           total_seats: number
         }[]
       }
+      is_admin: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      is_verified_admin: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       payment_method: "pix" | "cartao"
