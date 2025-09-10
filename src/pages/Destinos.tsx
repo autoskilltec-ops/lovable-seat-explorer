@@ -194,7 +194,8 @@ export default function Destinos() {
     if (!selectedDestination) return;
 
     if (!newTripForDestination.departure_date || !newTripForDestination.return_date ||
-        !newTripForDestination.price_individual || !newTripForDestination.price_couple || !newTripForDestination.price_group) {
+        !newTripForDestination.price_individual || !newTripForDestination.price_couple || 
+        !newTripForDestination.price_group || !newTripForDestination.bus_quantity) {
       toast({
         title: "Erro",
         description: "Preencha todas as informações da nova viagem.",
@@ -204,7 +205,8 @@ export default function Destinos() {
     }
 
     try {
-      const { error } = await supabase
+      // Create the trip first
+      const { data: tripData, error: tripError } = await supabase
         .from("trips")
         .insert([{ 
           destination_id: selectedDestination.id,
@@ -213,13 +215,48 @@ export default function Destinos() {
           price_individual: parseFloat(newTripForDestination.price_individual),
           price_couple: parseFloat(newTripForDestination.price_couple),
           price_group: parseFloat(newTripForDestination.price_group)
-        }]);
+        }])
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (tripError) throw tripError;
+
+      // Create buses for this trip
+      const busQuantity = parseInt(newTripForDestination.bus_quantity);
+      const busesToCreate = Array.from({ length: busQuantity }, (_, i) => ({
+        trip_id: tripData.id,
+        bus_number: i + 1
+      }));
+
+      const { data: busesData, error: busesError } = await supabase
+        .from("buses")
+        .insert(busesToCreate)
+        .select();
+
+      if (busesError) throw busesError;
+
+      // Create 60 seats for each bus
+      const seatsToCreate = [];
+      for (const bus of busesData) {
+        for (let seatNum = 1; seatNum <= 60; seatNum++) {
+          seatsToCreate.push({
+            trip_id: tripData.id,
+            bus_id: bus.id,
+            seat_number: seatNum,
+            status: 'disponivel'
+          });
+        }
+      }
+
+      const { error: seatsError } = await supabase
+        .from("bus_seats")
+        .insert(seatsToCreate);
+
+      if (seatsError) throw seatsError;
 
       toast({
         title: "Sucesso",
-        description: "Nova data adicionada ao destino!",
+        description: `Nova viagem criada com ${busQuantity} ônibus e ${busQuantity * 60} assentos!`,
       });
 
       setNewTripForDestination({
@@ -227,7 +264,8 @@ export default function Destinos() {
         return_date: "",
         price_individual: "",
         price_couple: "",
-        price_group: ""
+        price_group: "",
+        bus_quantity: "1"
       });
       setIsAddTripDialogOpen(false);
       await fetchTrips();
