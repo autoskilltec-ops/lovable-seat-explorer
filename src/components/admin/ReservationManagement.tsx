@@ -93,6 +93,7 @@ const ReservationManagement = () => {
     try {
       // Buscar a reserva para pegar os seat_ids antes de atualizar
       const reservation = reservations.find(r => r.id === reservationId);
+      if (!reservation) throw new Error("Reserva não encontrada");
       
       // Atualizar status da reserva para "pago" com timestamp de aprovação
       const { error: reservationError } = await supabase
@@ -105,8 +106,22 @@ const ReservationManagement = () => {
 
       if (reservationError) throw reservationError;
 
-      // Atualizar assentos para ocupado usando os IDs dos assentos salvos na reserva
-      if (reservation?.seat_ids && reservation.seat_ids.length > 0) {
+      // Buscar os números dos assentos se houver seat_ids
+      let seatNumbers: string[] = [];
+      if (reservation.seat_ids && reservation.seat_ids.length > 0) {
+        const { data: seatData, error: seatQueryError } = await supabase
+          .from('bus_seats')
+          .select('seat_number')
+          .in('id', reservation.seat_ids)
+          .order('seat_number');
+
+        if (seatQueryError) {
+          console.error('Erro ao buscar números dos assentos:', seatQueryError);
+        } else {
+          seatNumbers = seatData.map(seat => seat.seat_number.toString());
+        }
+
+        // Atualizar assentos para ocupado
         const { error: seatsError } = await supabase
           .from('bus_seats')
           .update({ 
@@ -123,16 +138,55 @@ const ReservationManagement = () => {
             description: "Reserva confirmada, mas houve problema ao atualizar os assentos",
             variant: "destructive"
           });
-        } else {
+        }
+      }
+
+      // Enviar e-mail de confirmação se houver e-mail do cliente
+      if (reservation.customer_email) {
+        try {
+          const reservationData = {
+            reservationId: reservation.id,
+            customerName: reservation.customer_name,
+            customerEmail: reservation.customer_email,
+            tripDestination: `${reservation.trip.destination.name} - ${reservation.trip.destination.state}`,
+            departureDate: reservation.trip.departure_date,
+            returnDate: reservation.trip.return_date,
+            totalAmount: reservation.total_amount * 100, // Converter para centavos
+            passengers: reservation.passengers,
+            planType: reservation.plan_type,
+            seatNumbers: seatNumbers,
+            confirmationCode: reservation.codigo_confirmacao
+          };
+
+          const { error: emailError } = await supabase.functions.invoke('send-reservation-confirmation', {
+            body: { reservationData }
+          });
+
+          if (emailError) {
+            console.error('Erro ao enviar e-mail:', emailError);
+            toast({
+              title: "Reserva confirmada!",
+              description: "Reserva confirmada, mas não foi possível enviar o e-mail de confirmação",
+              variant: "destructive"
+            });
+          } else {
+            toast({
+              title: "Reserva confirmada!",
+              description: `Reserva confirmada e e-mail enviado para ${reservation.customer_email}`,
+            });
+          }
+        } catch (emailError) {
+          console.error('Erro ao enviar e-mail:', emailError);
           toast({
             title: "Reserva confirmada!",
-            description: `Reserva confirmada e assentos ${reservation.seat_ids.join(', ')} marcados como ocupados`,
+            description: "Reserva confirmada, mas não foi possível enviar o e-mail de confirmação",
+            variant: "destructive"
           });
         }
       } else {
         toast({
           title: "Reserva confirmada!",
-          description: "A reserva foi confirmada com sucesso",
+          description: `Reserva confirmada! ${seatNumbers.length > 0 ? `Assentos ${seatNumbers.join(', ')} marcados como ocupados` : ''}`,
         });
       }
 
