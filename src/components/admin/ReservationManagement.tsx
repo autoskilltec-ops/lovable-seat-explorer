@@ -141,13 +141,32 @@ const ReservationManagement = () => {
         }
       }
 
-      // Enviar e-mail de confirmação se houver e-mail do cliente
-      if (reservation.customer_email) {
-        try {
+      // Enviar e-mail de confirmação para o e-mail do usuário que fez a reserva
+      try {
+        // Determinar e-mail de destino: usa customer_email; se ausente, busca no perfil pelo user_id
+        let targetEmail: string | null = reservation.customer_email ?? null;
+
+        if (!targetEmail) {
+          const userId = (reservation as any).user_id;
+          if (userId) {
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('email')
+              .eq('user_id', userId)
+              .single();
+            if (profileError) {
+              console.error('Erro ao buscar e-mail do perfil:', profileError);
+            } else {
+              targetEmail = profile?.email ?? null;
+            }
+          }
+        }
+
+        if (targetEmail) {
           const reservationData = {
             reservationId: reservation.id,
             customerName: reservation.customer_name,
-            customerEmail: reservation.customer_email,
+            customerEmail: targetEmail,
             tripDestination: `${reservation.trip.destination.name} - ${reservation.trip.destination.state}`,
             departureDate: reservation.trip.departure_date,
             returnDate: reservation.trip.return_date,
@@ -165,28 +184,29 @@ const ReservationManagement = () => {
           if (emailError) {
             console.error('Erro ao enviar e-mail:', emailError);
             toast({
-              title: "Reserva confirmada!",
-              description: "Reserva confirmada, mas não foi possível enviar o e-mail de confirmação",
-              variant: "destructive"
+              title: 'Reserva confirmada!',
+              description: 'Reserva confirmada, mas não foi possível enviar o e-mail de confirmação',
+              variant: 'destructive'
             });
           } else {
             toast({
-              title: "Reserva confirmada!",
-              description: `Reserva confirmada e e-mail enviado para ${reservation.customer_email}`,
+              title: 'Reserva confirmada!',
+              description: `Reserva confirmada e e-mail enviado para ${targetEmail}`,
             });
           }
-        } catch (emailError) {
-          console.error('Erro ao enviar e-mail:', emailError);
+        } else {
           toast({
-            title: "Reserva confirmada!",
-            description: "Reserva confirmada, mas não foi possível enviar o e-mail de confirmação",
-            variant: "destructive"
+            title: 'Reserva confirmada!',
+            description: 'Reserva confirmada, mas não foi possível determinar o e-mail do usuário.',
+            variant: 'destructive'
           });
         }
-      } else {
+      } catch (emailError) {
+        console.error('Erro ao enviar e-mail:', emailError);
         toast({
-          title: "Reserva confirmada!",
-          description: `Reserva confirmada! ${seatNumbers.length > 0 ? `Assentos ${seatNumbers.join(', ')} marcados como ocupados` : ''}`,
+          title: 'Reserva confirmada!',
+          description: 'Reserva confirmada, mas não foi possível enviar o e-mail de confirmação',
+          variant: 'destructive'
         });
       }
 
