@@ -31,6 +31,30 @@ interface Trip {
   destination: Destination;
 }
 
+interface NewDestinationForm {
+  name: string;
+  state: string;
+  description: string;
+  image_url: string;
+}
+
+interface NewTripForm {
+  departure_date: string;
+  return_date: string;
+  price_individual: string;
+  price_couple: string;
+  price_group: string;
+}
+
+interface NewTripForDestinationForm {
+  departure_date: string;
+  return_date: string;
+  price_individual: string;
+  price_couple: string;
+  price_group: string;
+  bus_quantity: string;
+}
+
 export default function Destinos() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -40,14 +64,14 @@ export default function Destinos() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
-  const [newDestination, setNewDestination] = useState({
+  const [newDestination, setNewDestination] = useState<NewDestinationForm>({
     name: "",
     state: "",
     description: "",
     image_url: ""
   });
 
-  const [newTrip, setNewTrip] = useState({
+  const [newTrip, setNewTrip] = useState<NewTripForm>({
     departure_date: "",
     return_date: "",
     price_individual: "",
@@ -55,7 +79,7 @@ export default function Destinos() {
     price_group: ""
   });
 
-  const [newTripForDestination, setNewTripForDestination] = useState({
+  const [newTripForDestination, setNewTripForDestination] = useState<NewTripForDestinationForm>({
     departure_date: "",
     return_date: "",
     price_individual: "",
