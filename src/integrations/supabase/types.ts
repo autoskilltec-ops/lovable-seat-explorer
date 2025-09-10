@@ -396,6 +396,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      validate_password_strength: {
+        Args: { password: string }
+        Returns: boolean
+      }
     }
     Enums: {
       payment_method: "pix" | "cartao"
