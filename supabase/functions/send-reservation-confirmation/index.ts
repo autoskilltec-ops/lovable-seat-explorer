@@ -80,8 +80,22 @@ const handler = async (req: Request): Promise<Response> => {
 
     if ((emailResponse as any)?.error) {
       console.error("Resend error while sending email:", (emailResponse as any).error);
-      const statusCode = (emailResponse as any).error?.statusCode ?? 500;
-      return new Response(JSON.stringify(emailResponse), {
+      const resendError = (emailResponse as any).error;
+      const statusCode = resendError?.statusCode ?? 500;
+      
+      // Handle domain verification error specifically
+      if (resendError?.error?.includes("verify a domain")) {
+        return new Response(JSON.stringify({
+          error: "Email não enviado: É necessário verificar um domínio no Resend para enviar emails para outros endereços. Acesse resend.com/domains"
+        }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      
+      return new Response(JSON.stringify({
+        error: resendError?.error || "Erro ao enviar email"
+      }), {
         status: statusCode,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
