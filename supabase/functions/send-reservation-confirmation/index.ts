@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": window?.location?.origin || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -30,7 +30,41 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { reservationData }: { reservationData: ReservationData } = await req.json();
+    const body = await req.json();
+    const { reservationData }: { reservationData: ReservationData } = body;
+    
+    // Input validation
+    if (!reservationData || typeof reservationData !== 'object') {
+      throw new Error("Invalid reservation data provided");
+    }
+
+    // Validate required fields
+    const requiredFields = [
+      'reservationId', 'customerName', 'customerEmail', 'tripDestination',
+      'departureDate', 'returnDate', 'totalAmount', 'passengers', 'planType', 'confirmationCode'
+    ];
+    
+    for (const field of requiredFields) {
+      if (!reservationData[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(reservationData.customerEmail)) {
+      throw new Error("Invalid email format");
+    }
+
+    // Validate amount is positive number
+    if (typeof reservationData.totalAmount !== 'number' || reservationData.totalAmount <= 0) {
+      throw new Error("Invalid total amount");
+    }
+
+    // Validate passengers count
+    if (typeof reservationData.passengers !== 'number' || reservationData.passengers < 1) {
+      throw new Error("Invalid passenger count");
+    }
     
     console.log("Sending confirmation email for reservation:", reservationData.reservationId);
 

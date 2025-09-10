@@ -17,6 +17,20 @@ export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Password validation function
+  const validatePassword = (password: string) => {
+    if (password.length < 8) {
+      return "A senha deve ter pelo menos 8 caracteres";
+    }
+    if (!/[0-9]/.test(password)) {
+      return "A senha deve conter pelo menos um número";
+    }
+    if (!/[A-Za-z]/.test(password)) {
+      return "A senha deve conter pelo menos uma letra";
+    }
+    return null;
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -35,13 +49,37 @@ export default function Auth() {
         });
         navigate("/destinos");
       } else {
+        // Validate password strength before signup
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+          toast({
+            title: "Erro na senha",
+            description: passwordError,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Validate required fields
+        if (!fullName.trim() || !phone.trim()) {
+          toast({
+            title: "Campos obrigatórios",
+            description: "Por favor, preencha todos os campos.",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
-              full_name: fullName,
-              phone: phone,
+              full_name: fullName.trim(),
+              phone: phone.trim(),
             }
           }
         });
@@ -53,9 +91,20 @@ export default function Auth() {
         });
       }
     } catch (error: any) {
+      let errorMessage = error.message;
+      
+      // Handle common errors with user-friendly messages
+      if (error.message.includes("User already registered")) {
+        errorMessage = "Este email já está cadastrado. Tente fazer login.";
+      } else if (error.message.includes("Invalid email")) {
+        errorMessage = "Por favor, insira um email válido.";
+      } else if (error.message.includes("Password should be")) {
+        errorMessage = "A senha deve atender aos requisitos de segurança.";
+      }
+      
       toast({
         title: "Erro",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -128,6 +177,11 @@ export default function Auth() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              {!isLogin && (
+                <p className="text-xs text-muted-foreground">
+                  A senha deve ter pelo menos 8 caracteres, incluindo uma letra e um número
+                </p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
