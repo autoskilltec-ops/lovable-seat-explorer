@@ -172,8 +172,8 @@ export default function Destinos() {
 
       if (destinationError) throw destinationError;
 
-      // Criar viagem associada ao destino
-      const { error: tripError } = await supabase
+      // Criar viagem associada ao destino com 3 ônibus
+      const { data: tripData, error: tripError } = await supabase
         .from("trips")
         .insert([{
           destination_id: destinationData.id,
@@ -181,10 +181,47 @@ export default function Destinos() {
           return_date: newTrip.return_date,
           price_individual: parseFloat(newTrip.price_individual),
           price_couple: parseFloat(newTrip.price_couple),
-          price_group: parseFloat(newTrip.price_group)
-        }]);
+          price_group: parseFloat(newTrip.price_group),
+          bus_quantity: 3
+        }])
+        .select()
+        .single();
 
       if (tripError) throw tripError;
+
+      // Criar 3 ônibus para esta viagem
+      const busesToCreate = Array.from({ length: 3 }, (_, i) => ({
+        trip_id: tripData.id,
+        bus_number: i + 1
+      }));
+
+      const { data: busesData, error: busesError } = await (supabase as any)
+        .from("buses")
+        .insert(busesToCreate)
+        .select();
+
+      if (busesError) throw busesError;
+
+      // Criar 60 assentos para cada ônibus
+      const seatsToCreate = [];
+      for (const bus of (busesData as any)) {
+        for (let seatNum = 1; seatNum <= 60; seatNum++) {
+          seatsToCreate.push({
+            trip_id: tripData.id,
+            bus_id: bus.id,
+            seat_number: seatNum,
+            status: 'disponivel'
+          });
+        }
+      }
+
+      if (seatsToCreate.length > 0) {
+        const { error: seatsError } = await supabase
+          .from("bus_seats")
+          .insert(seatsToCreate);
+
+        if (seatsError) throw seatsError;
+      }
 
       toast({
         title: "Sucesso",
@@ -213,6 +250,110 @@ export default function Destinos() {
         description: "Erro ao criar destino e viagem. Tente novamente.",
         variant: "destructive",
       });
+    }
+  };
+
+  const populateExistingTripsWithBuses = async () => {
+    try {
+      // Buscar trips que não têm buses
+      const { data: tripsWithoutBuses, error: tripsError } = await supabase
+        .from("trips")
+        .select(`
+          id, 
+          bus_quantity,
+          buses!inner(id)
+        `)
+        .is("buses.id", null);
+
+      if (tripsError) {
+        console.log("Buscando todas as trips para verificar buses...");
+        
+        // Fallback: buscar todas as trips e verificar quais não têm buses
+        const { data: allTrips, error: allTripsError } = await supabase
+          .from("trips")
+          .select("id, bus_quantity");
+
+        if (allTripsError) throw allTripsError;
+
+        const { data: existingBuses, error: busesError } = await supabase
+          .from("buses" as any)
+          .select("trip_id");
+
+        if (busesError) throw busesError;
+
+        const tripIdsWithBuses = new Set((existingBuses as any)?.map((b: any) => b.trip_id) || []);
+        const tripsNeedingBuses = (allTrips || []).filter(trip => !tripIdsWithBuses.has(trip.id));
+
+        for (const trip of tripsNeedingBuses) {
+          await createBusesForTrip(trip.id, 3);
+        }
+
+        toast({
+          title: "Sucesso",
+          description: `Criados ônibus para ${tripsNeedingBuses.length} viagens existentes.`,
+        });
+        return;
+      }
+
+      // Processar trips sem buses
+      for (const trip of tripsWithoutBuses || []) {
+        await createBusesForTrip(trip.id, 3);
+      }
+
+      toast({
+        title: "Sucesso",
+        description: `Criados ônibus para ${tripsWithoutBuses?.length || 0} viagens existentes.`,
+      });
+
+    } catch (error) {
+      console.error("Erro ao popular trips com ônibus:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao criar ônibus para viagens existentes.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const createBusesForTrip = async (tripId: string, busQuantity: number) => {
+    // Atualizar bus_quantity na trip se necessário
+    await supabase
+      .from("trips")
+      .update({ bus_quantity: busQuantity })
+      .eq("id", tripId);
+
+    // Criar ônibus
+    const busesToCreate = Array.from({ length: busQuantity }, (_, i) => ({
+      trip_id: tripId,
+      bus_number: i + 1
+    }));
+
+    const { data: busesData, error: busesError } = await (supabase as any)
+      .from("buses")
+      .insert(busesToCreate)
+      .select();
+
+    if (busesError) throw busesError;
+
+    // Criar assentos para cada ônibus
+    const seatsToCreate = [];
+    for (const bus of (busesData as any)) {
+      for (let seatNum = 1; seatNum <= 60; seatNum++) {
+        seatsToCreate.push({
+          trip_id: tripId,
+          bus_id: bus.id,
+          seat_number: seatNum,
+          status: 'disponivel'
+        });
+      }
+    }
+
+    if (seatsToCreate.length > 0) {
+      const { error: seatsError } = await supabase
+        .from("bus_seats")
+        .insert(seatsToCreate);
+
+      if (seatsError) throw seatsError;
     }
   };
 
