@@ -291,375 +291,190 @@ export default function Destinos() {
     }
   };
 
-  const handleCreateDestination = async () => {
-    if (!newDestination.name || !newDestination.state || !newDestination.description) {
-      toast({
-        title: "Erro",
-        description: "Todos os campos obrigatórios do destino devem ser preenchidos.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!newTrip.departure_date || !newTrip.return_date || !newTrip.departure_time ||
-        !newTrip.duration_hours || !newTrip.price_individual || !newTrip.price_couple || !newTrip.price_group) {
-      toast({
-        title: "Erro", 
-        description: "Todos os campos da viagem devem ser preenchidos.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Criar destino primeiro
-      const { data: destinationData, error: destinationError } = await supabase
-        .from("destinations")
-        .insert([newDestination])
-        .select()
-        .single();
-
-      if (destinationError) throw destinationError;
-
-      // Criar viagem associada ao destino com 3 ônibus
-      const { data: tripData, error: tripError } = await supabase
-        .from("trips")
-        .insert([{
-          destination_id: destinationData.id,
-          departure_date: newTrip.departure_date,
-          return_date: newTrip.return_date,
-          departure_time: newTrip.departure_time,
-          duration_hours: parseInt(newTrip.duration_hours),
-          price_individual: parseFloat(newTrip.price_individual),
-          price_couple: parseFloat(newTrip.price_couple),
-          price_group: parseFloat(newTrip.price_group),
-          bus_quantity: 3
-        }])
-        .select()
-        .single();
-
-      if (tripError) throw tripError;
-
-      // Criar 3 ônibus para esta viagem
-      const busesToCreate = Array.from({ length: 3 }, (_, i) => ({
-        trip_id: tripData.id,
-        bus_number: i + 1
-      }));
-
-      const { data: busesData, error: busesError } = await (supabase as any)
-        .from("buses")
-        .insert(busesToCreate)
-        .select();
-
-      if (busesError) throw busesError;
-
-      // Criar 60 assentos para cada ônibus
-      const seatsToCreate = [];
-      for (const bus of (busesData as any)) {
-        for (let seatNum = 1; seatNum <= 60; seatNum++) {
-          seatsToCreate.push({
-            trip_id: tripData.id,
-            bus_id: bus.id,
-            seat_number: seatNum,
-            status: 'disponivel'
-          });
-        }
-      }
-
-      if (seatsToCreate.length > 0) {
-        const { error: seatsError } = await supabase
-          .from("bus_seats")
-          .insert(seatsToCreate);
-
-        if (seatsError) throw seatsError;
-      }
-
-      toast({
-        title: "Sucesso",
-        description: "Destino e viagem criados com sucesso!",
-      });
-
-      setNewDestination({
-        name: "",
-        state: "",
-        description: "",
-        image_url: ""
-      });
-      setNewTrip({
-        departure_date: "",
-        return_date: "",
-        departure_time: "06:00",
-        duration_hours: "24",
-        price_individual: "",
-        price_couple: "",
-        price_group: ""
-      });
-      setIsDialogOpen(false);
-      fetchTrips(); // Recarregar dados para mostrar o novo destino
-    } catch (error) {
-      console.error("Erro ao criar destino:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao criar destino e viagem. Tente novamente.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const populateExistingTripsWithBuses = async () => {
-    try {
-      // Buscar trips que não têm buses
-      const { data: tripsWithoutBuses, error: tripsError } = await supabase
-        .from("trips")
-        .select(`
-          id, 
-          bus_quantity,
-          buses!inner(id)
-        `)
-        .is("buses.id", null);
-
-      if (tripsError) {
-        console.log("Buscando todas as trips para verificar buses...");
-        
-        // Fallback: buscar todas as trips e verificar quais não têm buses
-        const { data: allTrips, error: allTripsError } = await supabase
-          .from("trips")
-          .select("id, bus_quantity");
-
-        if (allTripsError) throw allTripsError;
-
-        const { data: existingBuses, error: busesError } = await supabase
-          .from("buses" as any)
-          .select("trip_id");
-
-        if (busesError) throw busesError;
-
-        const tripIdsWithBuses = new Set((existingBuses as any)?.map((b: any) => b.trip_id) || []);
-        const tripsNeedingBuses = (allTrips || []).filter(trip => !tripIdsWithBuses.has(trip.id));
-
-        for (const trip of tripsNeedingBuses) {
-          await createBusesForTrip(trip.id, 3);
-        }
-
-        toast({
-          title: "Sucesso",
-          description: `Criados ônibus para ${tripsNeedingBuses.length} viagens existentes.`,
-        });
-        return;
-      }
-
-      // Processar trips sem buses
-      for (const trip of tripsWithoutBuses || []) {
-        await createBusesForTrip(trip.id, 3);
-      }
-
-      toast({
-        title: "Sucesso",
-        description: `Criados ônibus para ${tripsWithoutBuses?.length || 0} viagens existentes.`,
-      });
-
-    } catch (error) {
-      console.error("Erro ao popular trips com ônibus:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao criar ônibus para viagens existentes.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const createBusesForTrip = async (tripId: string, busQuantity: number) => {
-    // Atualizar bus_quantity na trip se necessário
-    await supabase
-      .from("trips")
-      .update({ bus_quantity: busQuantity })
-      .eq("id", tripId);
-
-    // Criar ônibus
-    const busesToCreate = Array.from({ length: busQuantity }, (_, i) => ({
-      trip_id: tripId,
-      bus_number: i + 1
-    }));
-
-    const { data: busesData, error: busesError } = await (supabase as any)
-      .from("buses")
-      .insert(busesToCreate)
-      .select();
-
-    if (busesError) throw busesError;
-
-    // Criar assentos para cada ônibus
-    const seatsToCreate = [];
-    for (const bus of (busesData as any)) {
-      for (let seatNum = 1; seatNum <= 60; seatNum++) {
-        seatsToCreate.push({
-          trip_id: tripId,
-          bus_id: bus.id,
-          seat_number: seatNum,
-          status: 'disponivel'
-        });
-      }
-    }
-
-    if (seatsToCreate.length > 0) {
-      const { error: seatsError } = await supabase
-        .from("bus_seats")
-        .insert(seatsToCreate);
-
-      if (seatsError) throw seatsError;
-    }
-  };
-
-  const handleCreateTripForDestination = async () => {
-    if (!selectedDestination) return;
-
-    if (!newTripForDestination.departure_date || !newTripForDestination.return_date ||
-        !newTripForDestination.departure_time || !newTripForDestination.duration_hours ||
-        !newTripForDestination.price_individual || !newTripForDestination.price_couple || 
-        !newTripForDestination.price_group || !newTripForDestination.bus_quantity) {
-      toast({
-        title: "Erro",
-        description: "Preencha todas as informações da nova viagem.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Create the trip first
-      const { data: tripData, error: tripError } = await supabase
-        .from("trips")
-        .insert([{ 
-          destination_id: selectedDestination.id,
-          departure_date: newTripForDestination.departure_date,
-          return_date: newTripForDestination.return_date,
-          departure_time: newTripForDestination.departure_time,
-          duration_hours: parseInt(newTripForDestination.duration_hours),
-          price_individual: parseFloat(newTripForDestination.price_individual),
-          price_couple: parseFloat(newTripForDestination.price_couple),
-          price_group: parseFloat(newTripForDestination.price_group)
-        }])
-        .select()
-        .single();
-
-      if (tripError) throw tripError;
-
-      // Create buses for this trip with bus_quantity
-      const busQuantity = parseInt(newTripForDestination.bus_quantity);
-      const { data: tripWithBusData, error: tripWithBusError } = await supabase
-        .from("trips")
-        .update({ bus_quantity: busQuantity })
-        .eq("id", tripData.id);
-
-      if (tripWithBusError) console.warn("Bus quantity update warning:", tripWithBusError);
-
-      // Create buses for this trip
-      const busesToCreate = Array.from({ length: busQuantity }, (_, i) => ({
-        trip_id: tripData.id,
-        bus_number: i + 1
-      }));
-
-      const { data: busesData, error: busesError } = await supabase
-        .from("buses" as any)
-        .insert(busesToCreate)
-        .select();
-
-      if (busesError) throw busesError;
-
-      // Create 60 seats for each bus
-      const seatsToCreate = [];
-      for (const bus of (busesData as any)) {
-        for (let seatNum = 1; seatNum <= 60; seatNum++) {
-          seatsToCreate.push({
-            trip_id: tripData.id,
-            bus_id: bus.id,
-            seat_number: seatNum,
-            status: 'disponivel'
-          });
-        }
-      }
-
-      const { error: seatsError } = await supabase
-        .from("bus_seats")
-        .insert(seatsToCreate);
-
-      if (seatsError) throw seatsError;
-
-      toast({
-        title: "Sucesso",
-        description: `Nova viagem criada com ${busQuantity} ônibus e ${busQuantity * 60} assentos!`,
-      });
-
-      setNewTripForDestination({
-        departure_date: "",
-        return_date: "",
-        departure_time: "06:00",
-        duration_hours: "24",
-        price_individual: "",
-        price_couple: "",
-        price_group: "",
-        bus_quantity: "1"
-      });
-      setIsAddTripDialogOpen(false);
-      await fetchTrips();
-    } catch (error) {
-      console.error("Erro ao criar viagem:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível criar a nova viagem.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Agrupar viagens por destino
-  const groupedByDestination = trips.reduce((acc, trip) => {
-    const destinationId = trip.destination.id;
-    if (!acc[destinationId]) {
-      acc[destinationId] = {
+  // Get unique destinations with their trips
+  const uniqueDestinations = trips.reduce((acc, trip) => {
+    const existingDestination = acc.find(item => item.destination.id === trip.destination.id);
+    
+    if (existingDestination) {
+      existingDestination.trips.push(trip);
+    } else {
+      acc.push({
         destination: trip.destination,
-        trips: []
-      };
+        trips: [trip]
+      });
     }
-    acc[destinationId].trips.push(trip);
+    
     return acc;
-  }, {} as Record<string, { destination: Destination; trips: Trip[] }>);
-
-  const uniqueDestinations = Object.values(groupedByDestination);
+  }, [] as Array<{ destination: Destination; trips: Trip[] }>);
 
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <div className="h-48 bg-muted"></div>
-              <CardContent className="p-6">
-                <div className="h-4 bg-muted rounded mb-2"></div>
-                <div className="h-3 bg-muted rounded mb-4"></div>
-                <div className="h-8 bg-muted rounded"></div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="text-center">
+          <p className="text-muted-foreground">Carregando destinos...</p>
         </div>
       </div>
     );
   }
 
-  // Se um destino foi selecionado, mostrar apenas as viagens desse destino
+  // Show trips for selected destination
   if (selectedDestination) {
-    const destinationTrips = groupedByDestination[selectedDestination.id]?.trips || [];
-    
+    const destinationTrips = trips.filter(trip => trip.destination.id === selectedDestination.id);
+
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <Button
-            variant="ghost"
+        {/* Render all dialogs - always available */}
+        {/* Dialog para criar novo destino */}
+        {isAdmin && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Criar Novo Destino e Viagem</DialogTitle>
+                <DialogDescription>
+                  Preencha as informações do destino e da primeira viagem disponível.
+                </DialogDescription>
+              </DialogHeader>
+              
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Dialog para editar destino */}
+        <Dialog open={isEditDestinationOpen} onOpenChange={setIsEditDestinationOpen}>
+          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Destino</DialogTitle>
+              <DialogDescription>
+                Atualize as informações do destino selecionado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 py-4">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_name">Nome *</Label>
+                  <Input
+                    id="edit_name"
+                    value={newDestination.name}
+                    onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
+                    placeholder="Ex: Fortaleza"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_state">Estado *</Label>
+                  <Input
+                    id="edit_state"
+                    value={newDestination.state}
+                    onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
+                    placeholder="Ex: CE"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_description">Descrição *</Label>
+                  <Textarea
+                    id="edit_description"
+                    value={newDestination.description}
+                    onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
+                    placeholder="Descreva o destino..."
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_image_url">URL da Imagem</Label>
+                  <Input
+                    id="edit_image_url"
+                    value={newDestination.image_url}
+                    onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
+                    placeholder="https://exemplo.com/imagem.jpg"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsEditDestinationOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateDestination}>
+                Atualizar Destino
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog para editar viagem */}
+        <Dialog open={isEditTripDialogOpen} onOpenChange={setIsEditTripDialogOpen}>
+          <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Viagem</DialogTitle>
+              <DialogDescription>
+                Atualize as datas, horário e duração da viagem.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 py-4">
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit_trip_departure_date">Data de Saída *</Label>
+                    <Input
+                      id="edit_trip_departure_date"
+                      type="date"
+                      value={editTripForm.departure_date}
+                      onChange={(e) => setEditTripForm({...editTripForm, departure_date: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit_trip_return_date">Data de Retorno *</Label>
+                    <Input
+                      id="edit_trip_return_date"
+                      type="date"
+                      value={editTripForm.return_date}
+                      onChange={(e) => setEditTripForm({...editTripForm, return_date: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit_trip_departure_time">Horário de Saída *</Label>
+                    <Input
+                      id="edit_trip_departure_time"
+                      type="time"
+                      value={editTripForm.departure_time}
+                      onChange={(e) => setEditTripForm({...editTripForm, departure_time: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit_trip_duration_hours">Duração (horas) *</Label>
+                    <Input
+                      id="edit_trip_duration_hours"
+                      type="number"
+                      min="1"
+                      max="168"
+                      value={editTripForm.duration_hours}
+                      onChange={(e) => setEditTripForm({...editTripForm, duration_hours: e.target.value})}
+                      placeholder="24"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsEditTripDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleUpdateTrip}>
+                Atualizar Viagem
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <div className="mb-6">
+          <Button 
+            variant="outline" 
             onClick={() => setSelectedDestination(null)}
             className="mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar aos destinos
+            Voltar aos Destinos
           </Button>
           
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
@@ -680,132 +495,6 @@ export default function Destinos() {
           <p className="text-muted-foreground mb-4">
             {selectedDestination.description}
           </p>
-          <Badge variant="secondary" className="text-sm">
-            {selectedDestination.state}
-          </Badge>
-
-          {isAdmin && (
-            <div className="mt-4">
-              <Dialog open={isAddTripDialogOpen} onOpenChange={setIsAddTripDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-primary/90">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Data
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px]">
-                  <DialogHeader>
-                    <DialogTitle>Nova data para {selectedDestination.name}</DialogTitle>
-                    <DialogDescription>
-                      Cadastre uma nova data mantendo o mesmo destino.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-6 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="departure_date_new">Data de Saída *</Label>
-                        <Input
-                          id="departure_date_new"
-                          type="date"
-                          value={newTripForDestination.departure_date}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, departure_date: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="return_date_new">Data de Retorno *</Label>
-                        <Input
-                          id="return_date_new"
-                          type="date"
-                          value={newTripForDestination.return_date}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, return_date: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="departure_time_new">Horário de Saída *</Label>
-                        <Input
-                          id="departure_time_new"
-                          type="time"
-                          value={newTripForDestination.departure_time}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, departure_time: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="duration_hours_new">Duração (horas) *</Label>
-                        <Input
-                          id="duration_hours_new"
-                          type="number"
-                          min="1"
-                          max="168"
-                          value={newTripForDestination.duration_hours}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, duration_hours: e.target.value })}
-                          placeholder="24"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_individual_new">Preço Individual *</Label>
-                        <Input
-                          id="price_individual_new"
-                          type="number"
-                          step="0.01"
-                          value={newTripForDestination.price_individual}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_individual: e.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_couple_new">Preço Casal *</Label>
-                        <Input
-                          id="price_couple_new"
-                          type="number"
-                          step="0.01"
-                          value={newTripForDestination.price_couple}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_couple: e.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_group_new">Preço Grupo *</Label>
-                        <Input
-                          id="price_group_new"
-                          type="number"
-                          step="0.01"
-                          value={newTripForDestination.price_group}
-                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, price_group: e.target.value })}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="bus_quantity_new">Quantidade de Ônibus *</Label>
-                      <select
-                        id="bus_quantity_new"
-                        value={newTripForDestination.bus_quantity}
-                        onChange={(e) => setNewTripForDestination({ ...newTripForDestination, bus_quantity: e.target.value })}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="1">1 Ônibus (60 assentos)</option>
-                        <option value="2">2 Ônibus (120 assentos)</option>
-                        <option value="3">3 Ônibus (180 assentos)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsAddTripDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={handleCreateTripForDestination}>Salvar Data</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -908,171 +597,7 @@ export default function Destinos() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Destinos Disponíveis</h1>
-          <p className="text-muted-foreground">
-            Escolha seu próximo destino para ver as datas disponíveis
-          </p>
-        </div>
-        
-        {isAdmin && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90">
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Destino
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Criar Novo Destino e Viagem</DialogTitle>
-                <DialogDescription>
-                  Preencha as informações do destino e da primeira viagem disponível.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 py-4">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Informações do Destino</h3>
-                  <div className="grid gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="name">Nome *</Label>
-                      <Input
-                        id="name"
-                        value={newDestination.name}
-                        onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
-                        placeholder="Ex: Fortaleza"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="state">Estado *</Label>
-                      <Input
-                        id="state"
-                        value={newDestination.state}
-                        onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
-                        placeholder="Ex: CE"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="description">Descrição *</Label>
-                      <Textarea
-                        id="description"
-                        value={newDestination.description}
-                        onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
-                        placeholder="Descreva o destino..."
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="image_url">URL da Imagem</Label>
-                      <Input
-                        id="image_url"
-                        value={newDestination.image_url}
-                        onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
-                        placeholder="https://exemplo.com/imagem.jpg"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Informações da Viagem</h3>
-                  <div className="grid gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="departure_date">Data de Saída *</Label>
-                        <Input
-                          id="departure_date"
-                          type="date"
-                          value={newTrip.departure_date}
-                          onChange={(e) => setNewTrip({...newTrip, departure_date: e.target.value})}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="return_date">Data de Retorno *</Label>
-                        <Input
-                          id="return_date"
-                          type="date"
-                          value={newTrip.return_date}
-                          onChange={(e) => setNewTrip({...newTrip, return_date: e.target.value})}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="departure_time">Horário de Saída *</Label>
-                        <Input
-                          id="departure_time"
-                          type="time"
-                          value={newTrip.departure_time}
-                          onChange={(e) => setNewTrip({...newTrip, departure_time: e.target.value})}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="duration_hours">Duração (horas) *</Label>
-                        <Input
-                          id="duration_hours"
-                          type="number"
-                          min="1"
-                          max="168"
-                          value={newTrip.duration_hours}
-                          onChange={(e) => setNewTrip({...newTrip, duration_hours: e.target.value})}
-                          placeholder="24"
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_individual">Preço Individual *</Label>
-                        <Input
-                          id="price_individual"
-                          type="number"
-                          step="0.01"
-                          value={newTrip.price_individual}
-                          onChange={(e) => setNewTrip({...newTrip, price_individual: e.target.value})}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_couple">Preço Casal *</Label>
-                        <Input
-                          id="price_couple"
-                          type="number"
-                          step="0.01"
-                          value={newTrip.price_couple}
-                          onChange={(e) => setNewTrip({...newTrip, price_couple: e.target.value})}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="price_group">Preço Grupo *</Label>
-                        <Input
-                          id="price_group"
-                          type="number"
-                          step="0.01"
-                          value={newTrip.price_group}
-                          onChange={(e) => setNewTrip({...newTrip, price_group: e.target.value})}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreateDestination}>
-                  Criar Destino e Viagem
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
-
+      {/* Render dialogs - always available */}
       {/* Dialog para editar destino */}
       <Dialog open={isEditDestinationOpen} onOpenChange={setIsEditDestinationOpen}>
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
@@ -1123,11 +648,7 @@ export default function Destinos() {
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => {
-              setIsEditDestinationOpen(false);
-              setEditingDestination(null);
-              setNewDestination({ name: "", state: "", description: "", image_url: "" });
-            }}>
+            <Button variant="outline" onClick={() => setIsEditDestinationOpen(false)}>
               Cancelar
             </Button>
             <Button onClick={handleUpdateDestination}>
@@ -1205,6 +726,15 @@ export default function Destinos() {
         </DialogContent>
       </Dialog>
 
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Destinos Disponíveis</h1>
+          <p className="text-muted-foreground">
+            Escolha seu próximo destino para ver as datas disponíveis
+          </p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {uniqueDestinations.map(({ destination, trips }) => (
           <Card 
@@ -1266,4 +796,3 @@ export default function Destinos() {
     </div>
   );
 }
-
