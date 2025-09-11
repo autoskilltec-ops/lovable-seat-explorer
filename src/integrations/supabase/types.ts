@@ -313,7 +313,9 @@ export type Database = {
           bus_quantity: number
           created_at: string | null
           departure_date: string
+          departure_time: string
           destination_id: string
+          duration_hours: number
           id: string
           includes_accommodation: boolean | null
           includes_breakfast: boolean | null
@@ -327,7 +329,9 @@ export type Database = {
           bus_quantity?: number
           created_at?: string | null
           departure_date: string
+          departure_time: string
           destination_id: string
+          duration_hours: number
           id?: string
           includes_accommodation?: boolean | null
           includes_breakfast?: boolean | null
@@ -341,7 +345,9 @@ export type Database = {
           bus_quantity?: number
           created_at?: string | null
           departure_date?: string
+          departure_time?: string
           destination_id?: string
+          duration_hours?: number
           id?: string
           includes_accommodation?: boolean | null
           includes_breakfast?: boolean | null

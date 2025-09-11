@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, MapPin, Users, ArrowLeft, Plus } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit } from "lucide-react";
 
 interface Destination {
   id: string;
@@ -25,6 +25,8 @@ interface Trip {
   id: string;
   departure_date: string;
   return_date: string;
+  departure_time: string;
+  duration_hours: number;
   price_individual: number;
   price_couple: number;
   price_group: number;
@@ -41,6 +43,8 @@ interface NewDestinationForm {
 interface NewTripForm {
   departure_date: string;
   return_date: string;
+  departure_time: string;
+  duration_hours: string;
   price_individual: string;
   price_couple: string;
   price_group: string;
@@ -49,6 +53,8 @@ interface NewTripForm {
 interface NewTripForDestinationForm {
   departure_date: string;
   return_date: string;
+  departure_time: string;
+  duration_hours: string;
   price_individual: string;
   price_couple: string;
   price_group: string;
@@ -64,6 +70,8 @@ export default function Destinos() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
+  const [isEditDestinationOpen, setIsEditDestinationOpen] = useState(false);
+  const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
   const [newDestination, setNewDestination] = useState<NewDestinationForm>({
     name: "",
     state: "",
@@ -74,6 +82,8 @@ export default function Destinos() {
   const [newTrip, setNewTrip] = useState<NewTripForm>({
     departure_date: "",
     return_date: "",
+    departure_time: "06:00",
+    duration_hours: "24",
     price_individual: "",
     price_couple: "",
     price_group: ""
@@ -82,6 +92,8 @@ export default function Destinos() {
   const [newTripForDestination, setNewTripForDestination] = useState<NewTripForDestinationForm>({
     departure_date: "",
     return_date: "",
+    departure_time: "06:00",
+    duration_hours: "24",
     price_individual: "",
     price_couple: "",
     price_group: "",
@@ -142,6 +154,68 @@ export default function Destinos() {
     }).format(price);
   };
 
+  const formatTime = (timeString: string) => {
+    return timeString.slice(0, 5); // Remove seconds from HH:MM:SS
+  };
+
+  const handleEditDestination = (destination: Destination) => {
+    setEditingDestination(destination);
+    setNewDestination({
+      name: destination.name,
+      state: destination.state,
+      description: destination.description,
+      image_url: destination.image_url
+    });
+    setIsEditDestinationOpen(true);
+  };
+
+  const handleUpdateDestination = async () => {
+    if (!editingDestination || !newDestination.name || !newDestination.state || !newDestination.description) {
+      toast({
+        title: "Erro",
+        description: "Todos os campos obrigatórios devem ser preenchidos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("destinations")
+        .update({
+          name: newDestination.name,
+          state: newDestination.state,
+          description: newDestination.description,
+          image_url: newDestination.image_url
+        })
+        .eq("id", editingDestination.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Destino atualizado com sucesso!",
+      });
+
+      setNewDestination({
+        name: "",
+        state: "",
+        description: "",
+        image_url: ""
+      });
+      setEditingDestination(null);
+      setIsEditDestinationOpen(false);
+      fetchTrips();
+    } catch (error) {
+      console.error("Erro ao atualizar destino:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar destino. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCreateDestination = async () => {
     if (!newDestination.name || !newDestination.state || !newDestination.description) {
       toast({
@@ -152,8 +226,8 @@ export default function Destinos() {
       return;
     }
 
-    if (!newTrip.departure_date || !newTrip.return_date || 
-        !newTrip.price_individual || !newTrip.price_couple || !newTrip.price_group) {
+    if (!newTrip.departure_date || !newTrip.return_date || !newTrip.departure_time ||
+        !newTrip.duration_hours || !newTrip.price_individual || !newTrip.price_couple || !newTrip.price_group) {
       toast({
         title: "Erro", 
         description: "Todos os campos da viagem devem ser preenchidos.",
@@ -179,6 +253,8 @@ export default function Destinos() {
           destination_id: destinationData.id,
           departure_date: newTrip.departure_date,
           return_date: newTrip.return_date,
+          departure_time: newTrip.departure_time,
+          duration_hours: parseInt(newTrip.duration_hours),
           price_individual: parseFloat(newTrip.price_individual),
           price_couple: parseFloat(newTrip.price_couple),
           price_group: parseFloat(newTrip.price_group),
@@ -237,6 +313,8 @@ export default function Destinos() {
       setNewTrip({
         departure_date: "",
         return_date: "",
+        departure_time: "06:00",
+        duration_hours: "24",
         price_individual: "",
         price_couple: "",
         price_group: ""
@@ -361,6 +439,7 @@ export default function Destinos() {
     if (!selectedDestination) return;
 
     if (!newTripForDestination.departure_date || !newTripForDestination.return_date ||
+        !newTripForDestination.departure_time || !newTripForDestination.duration_hours ||
         !newTripForDestination.price_individual || !newTripForDestination.price_couple || 
         !newTripForDestination.price_group || !newTripForDestination.bus_quantity) {
       toast({
@@ -379,6 +458,8 @@ export default function Destinos() {
           destination_id: selectedDestination.id,
           departure_date: newTripForDestination.departure_date,
           return_date: newTripForDestination.return_date,
+          departure_time: newTripForDestination.departure_time,
+          duration_hours: parseInt(newTripForDestination.duration_hours),
           price_individual: parseFloat(newTripForDestination.price_individual),
           price_couple: parseFloat(newTripForDestination.price_couple),
           price_group: parseFloat(newTripForDestination.price_group)
@@ -437,6 +518,8 @@ export default function Destinos() {
       setNewTripForDestination({
         departure_date: "",
         return_date: "",
+        departure_time: "06:00",
+        duration_hours: "24",
         price_individual: "",
         price_couple: "",
         price_group: "",
@@ -507,6 +590,16 @@ export default function Destinos() {
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <MapPin className="h-8 w-8 text-primary" />
             {selectedDestination.name}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleEditDestination(selectedDestination)}
+                className="ml-auto"
+              >
+                Editar Destino
+              </Button>
+            )}
           </h1>
           <p className="text-muted-foreground mb-4">
             {selectedDestination.description}
@@ -549,6 +642,30 @@ export default function Destinos() {
                           type="date"
                           value={newTripForDestination.return_date}
                           onChange={(e) => setNewTripForDestination({ ...newTripForDestination, return_date: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="departure_time_new">Horário de Saída *</Label>
+                        <Input
+                          id="departure_time_new"
+                          type="time"
+                          value={newTripForDestination.departure_time}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, departure_time: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="duration_hours_new">Duração (horas) *</Label>
+                        <Input
+                          id="duration_hours_new"
+                          type="number"
+                          min="1"
+                          max="168"
+                          value={newTripForDestination.duration_hours}
+                          onChange={(e) => setNewTripForDestination({ ...newTripForDestination, duration_hours: e.target.value })}
+                          placeholder="24"
                         />
                       </div>
                     </div>
@@ -634,8 +751,12 @@ export default function Destinos() {
                   <Calendar className="h-5 w-5 text-primary" />
                   {formatDate(trip.departure_date)} - {formatDate(trip.return_date)}
                 </CardTitle>
-                <CardDescription>
-                  Datas de ida e volta incluídas no pacote
+                <CardDescription className="space-y-1">
+                  <div>Datas de ida e volta incluídas no pacote</div>
+                  <div className="text-sm">
+                    <strong>Saída:</strong> {formatTime(trip.departure_time)} | 
+                    <strong> Duração:</strong> {trip.duration_hours}h
+                  </div>
                 </CardDescription>
               </CardHeader>
 
@@ -785,6 +906,30 @@ export default function Destinos() {
                         />
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="departure_time">Horário de Saída *</Label>
+                        <Input
+                          id="departure_time"
+                          type="time"
+                          value={newTrip.departure_time}
+                          onChange={(e) => setNewTrip({...newTrip, departure_time: e.target.value})}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="duration_hours">Duração (horas) *</Label>
+                        <Input
+                          id="duration_hours"
+                          type="number"
+                          min="1"
+                          max="168"
+                          value={newTrip.duration_hours}
+                          onChange={(e) => setNewTrip({...newTrip, duration_hours: e.target.value})}
+                          placeholder="24"
+                        />
+                      </div>
+                    </div>
                     
                     <div className="grid grid-cols-3 gap-4">
                       <div className="grid gap-2">
@@ -836,6 +981,70 @@ export default function Destinos() {
           </Dialog>
         )}
       </div>
+
+      {/* Dialog para editar destino */}
+      <Dialog open={isEditDestinationOpen} onOpenChange={setIsEditDestinationOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Destino</DialogTitle>
+            <DialogDescription>
+              Atualize as informações do destino selecionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_name">Nome *</Label>
+                <Input
+                  id="edit_name"
+                  value={newDestination.name}
+                  onChange={(e) => setNewDestination({...newDestination, name: e.target.value})}
+                  placeholder="Ex: Fortaleza"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_state">Estado *</Label>
+                <Input
+                  id="edit_state"
+                  value={newDestination.state}
+                  onChange={(e) => setNewDestination({...newDestination, state: e.target.value})}
+                  placeholder="Ex: CE"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_description">Descrição *</Label>
+                <Textarea
+                  id="edit_description"
+                  value={newDestination.description}
+                  onChange={(e) => setNewDestination({...newDestination, description: e.target.value})}
+                  placeholder="Descreva o destino..."
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_image_url">URL da Imagem</Label>
+                <Input
+                  id="edit_image_url"
+                  value={newDestination.image_url}
+                  onChange={(e) => setNewDestination({...newDestination, image_url: e.target.value})}
+                  placeholder="https://exemplo.com/imagem.jpg"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => {
+              setIsEditDestinationOpen(false);
+              setEditingDestination(null);
+              setNewDestination({ name: "", state: "", description: "", image_url: "" });
+            }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdateDestination}>
+              Atualizar Destino
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {uniqueDestinations.map(({ destination, trips }) => (
