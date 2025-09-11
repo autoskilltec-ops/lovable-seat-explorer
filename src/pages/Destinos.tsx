@@ -592,7 +592,7 @@ export default function Destinos() {
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      <span>Duração: {Math.ceil(trip.duration_hours / 24)} {Math.ceil(trip.duration_hours / 24) === 1 ? 'dia' : 'dias'} em cada excursão</span>
+                      <span>Duração: 3 dias em cada excursão</span>
                     </div>
                   </div>
                 </div>
