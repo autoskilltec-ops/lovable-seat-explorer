@@ -221,18 +221,39 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
       // Remove seat
       newSelectedSeats = selectedSeats.filter(id => id !== seat.id);
       
-      // Release temporary hold
-      try {
-        await supabase
-          .from("bus_seats")
-          .update({ 
-            status: 'disponivel',
-            reserved_until: null 
-          })
-          .eq("id", seat.id);
-      } catch (error) {
-        console.error("Erro ao liberar assento:", error);
-      }
+      // Update local state immediately for better UX
+      setSeats(prevSeats => 
+        prevSeats.map(s => 
+          s.id === seat.id 
+            ? { ...s, status: 'disponivel' as const, reserved_until: undefined }
+            : s
+        )
+      );
+      
+      // Release temporary hold in background
+      (async () => {
+        try {
+          await supabase
+            .from("bus_seats")
+            .update({ 
+              status: 'disponivel',
+              reserved_until: null 
+            })
+            .eq("id", seat.id);
+          // Update bus stats after successful API call
+          fetchBusesAndData();
+        } catch (error) {
+          console.error("Erro ao liberar assento:", error);
+          // Revert local state on error
+          setSeats(prevSeats => 
+            prevSeats.map(s => 
+              s.id === seat.id 
+                ? { ...s, status: 'reservado_temporario' as const }
+                : s
+            )
+          );
+        }
+      })();
     } else {
       // Add seat if not at max capacity
       if (selectedSeats.length >= maxPassengers) {
@@ -246,33 +267,45 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
       newSelectedSeats = [...selectedSeats, seat.id];
       
-      // Hold seat temporarily for 15 minutes
-      try {
-        const reservedUntil = new Date();
-        reservedUntil.setMinutes(reservedUntil.getMinutes() + 15);
-        
-        await supabase
-          .from("bus_seats")
-          .update({ 
-            status: 'reservado_temporario',
-            reserved_until: reservedUntil.toISOString()
-          })
-          .eq("id", seat.id);
-      } catch (error) {
-        console.error("Erro ao reservar assento:", error);
-        return;
-      }
+      // Update local state immediately for better UX
+      const reservedUntil = new Date();
+      reservedUntil.setMinutes(reservedUntil.getMinutes() + 15);
+      
+      setSeats(prevSeats => 
+        prevSeats.map(s => 
+          s.id === seat.id 
+            ? { ...s, status: 'reservado_temporario' as const, reserved_until: reservedUntil.toISOString() }
+            : s
+        )
+      );
+      
+      // Hold seat temporarily in background
+      (async () => {
+        try {
+          await supabase
+            .from("bus_seats")
+            .update({ 
+              status: 'reservado_temporario',
+              reserved_until: reservedUntil.toISOString()
+            })
+            .eq("id", seat.id);
+          // Update bus stats after successful API call
+          fetchBusesAndData();
+        } catch (error) {
+          console.error("Erro ao reservar assento:", error);
+          // Revert local state on error
+          setSeats(prevSeats => 
+            prevSeats.map(s => 
+              s.id === seat.id 
+                ? { ...s, status: 'disponivel' as const, reserved_until: undefined }
+                : s
+            )
+          );
+        }
+      })();
     }
 
     onSeatSelection(newSelectedSeats);
-    // Refresh seats to show updated status
-    if (selectedBusId) {
-      fetchSeatsForBus(selectedBusId);
-    } else {
-      fallbackFetchSeats();
-    }
-    // Update bus stats
-    fetchBusesAndData();
   };
 
   const getSeatColor = (seat: BusSeat) => {
@@ -452,19 +485,19 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
               
               return (
                 <>
-                  <h3 className="font-semibold mb-2">Ônibus {currentBus.bus_number}</h3>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
+                  <h3 className="font-semibold mb-3">Ônibus {currentBus.bus_number}</h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">Total:</span>
-                      <span className="ml-2 font-medium">{currentBus.total_seats}</span>
+                      <span className="font-medium">{currentBus.total_seats}</span>
                     </div>
-                    <div>
+                    <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">Disponíveis:</span>
-                      <span className="ml-2 font-medium text-success">{currentBus.available_seats}</span>
+                      <span className="font-medium text-green-600">{currentBus.available_seats}</span>
                     </div>
-                    <div>
+                    <div className="flex justify-between items-center py-1">
                       <span className="text-muted-foreground">Ocupados:</span>
-                      <span className="ml-2 font-medium text-destructive">{currentBus.occupied_seats}</span>
+                      <span className="font-medium text-destructive">{currentBus.occupied_seats}</span>
                     </div>
                   </div>
                 </>
