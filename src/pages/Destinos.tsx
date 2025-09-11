@@ -61,6 +61,13 @@ interface NewTripForDestinationForm {
   bus_quantity: string;
 }
 
+interface EditTripForm {
+  departure_date: string;
+  return_date: string;
+  departure_time: string;
+  duration_hours: string;
+}
+
 export default function Destinos() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -71,7 +78,9 @@ export default function Destinos() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
   const [isEditDestinationOpen, setIsEditDestinationOpen] = useState(false);
+  const [isEditTripDialogOpen, setIsEditTripDialogOpen] = useState(false);
   const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [newDestination, setNewDestination] = useState<NewDestinationForm>({
     name: "",
     state: "",
@@ -98,6 +107,13 @@ export default function Destinos() {
     price_couple: "",
     price_group: "",
     bus_quantity: "1"
+  });
+
+  const [editTripForm, setEditTripForm] = useState<EditTripForm>({
+    departure_date: "",
+    return_date: "",
+    departure_time: "06:00",
+    duration_hours: "24"
   });
 
   useEffect(() => {
@@ -167,6 +183,65 @@ export default function Destinos() {
       image_url: destination.image_url
     });
     setIsEditDestinationOpen(true);
+  };
+
+  const handleEditTrip = (trip: Trip) => {
+    setEditingTrip(trip);
+    setEditTripForm({
+      departure_date: trip.departure_date,
+      return_date: trip.return_date,
+      departure_time: trip.departure_time,
+      duration_hours: trip.duration_hours.toString()
+    });
+    setIsEditTripDialogOpen(true);
+  };
+
+  const handleUpdateTrip = async () => {
+    if (!editingTrip || !editTripForm.departure_date || !editTripForm.return_date || 
+        !editTripForm.departure_time || !editTripForm.duration_hours) {
+      toast({
+        title: "Erro",
+        description: "Todos os campos devem ser preenchidos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .update({
+          departure_date: editTripForm.departure_date,
+          return_date: editTripForm.return_date,
+          departure_time: editTripForm.departure_time,
+          duration_hours: parseInt(editTripForm.duration_hours)
+        })
+        .eq("id", editingTrip.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Viagem atualizada com sucesso!",
+      });
+
+      setEditTripForm({
+        departure_date: "",
+        return_date: "",
+        departure_time: "06:00",
+        duration_hours: "24"
+      });
+      setEditingTrip(null);
+      setIsEditTripDialogOpen(false);
+      fetchTrips();
+    } catch (error) {
+      console.error("Erro ao atualizar viagem:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar viagem. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUpdateDestination = async () => {
@@ -597,6 +672,7 @@ export default function Destinos() {
                 onClick={() => handleEditDestination(selectedDestination)}
                 className="ml-auto"
               >
+                <Edit className="h-4 w-4 mr-1" />
                 Editar Destino
               </Button>
             )}
@@ -791,11 +867,26 @@ export default function Destinos() {
                   </div>
                 </div>
 
-                <Link to={`/checkout?trip_id=${trip.id}`} className="block w-full">
-                  <Button className="w-full bg-primary hover:bg-primary/90">
-                    Reservar Esta Data
-                  </Button>
-                </Link>
+                <div className="flex gap-2">
+                  <Link to={`/checkout?trip_id=${trip.id}`} className="flex-1">
+                    <Button className="w-full bg-primary hover:bg-primary/90">
+                      Reservar Esta Data
+                    </Button>
+                  </Link>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleEditTrip(trip);
+                      }}
+                      className="px-3"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -1041,6 +1132,74 @@ export default function Destinos() {
             </Button>
             <Button onClick={handleUpdateDestination}>
               Atualizar Destino
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar viagem */}
+      <Dialog open={isEditTripDialogOpen} onOpenChange={setIsEditTripDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Viagem</DialogTitle>
+            <DialogDescription>
+              Atualize as datas, horário e duração da viagem.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_trip_departure_date">Data de Saída *</Label>
+                  <Input
+                    id="edit_trip_departure_date"
+                    type="date"
+                    value={editTripForm.departure_date}
+                    onChange={(e) => setEditTripForm({...editTripForm, departure_date: e.target.value})}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_trip_return_date">Data de Retorno *</Label>
+                  <Input
+                    id="edit_trip_return_date"
+                    type="date"
+                    value={editTripForm.return_date}
+                    onChange={(e) => setEditTripForm({...editTripForm, return_date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_trip_departure_time">Horário de Saída *</Label>
+                  <Input
+                    id="edit_trip_departure_time"
+                    type="time"
+                    value={editTripForm.departure_time}
+                    onChange={(e) => setEditTripForm({...editTripForm, departure_time: e.target.value})}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_trip_duration_hours">Duração (horas) *</Label>
+                  <Input
+                    id="edit_trip_duration_hours"
+                    type="number"
+                    min="1"
+                    max="168"
+                    value={editTripForm.duration_hours}
+                    onChange={(e) => setEditTripForm({...editTripForm, duration_hours: e.target.value})}
+                    placeholder="24"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsEditTripDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUpdateTrip}>
+              Atualizar Viagem
             </Button>
           </div>
         </DialogContent>
