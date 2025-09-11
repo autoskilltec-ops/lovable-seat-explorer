@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit, Bed, Wind, Wifi, Coffee, Clock } from "lucide-react";
 
 interface Destination {
   id: string;
@@ -553,6 +553,47 @@ export default function Destinos() {
                     <span className="font-bold text-primary">
                       {formatPrice(trip.price_group)}
                     </span>
+                  </div>
+                </div>
+
+                {/* Conforto Section */}
+                <div className="space-y-3 border-t pt-4">
+                  <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                    <Bed className="h-4 w-4" />
+                    Conforto
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Bed className="h-3 w-3" />
+                      <span>Tipo: Leito</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Wind className="h-3 w-3" />
+                      <span>Ar-condicionado</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Wifi className="h-3 w-3" />
+                      <span>Wi-Fi</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Users className="h-3 w-3" />
+                      <span>Poltronas reclináveis</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Incluso no pacote Section */}
+                <div className="space-y-3 border-t pt-4">
+                  <h4 className="font-semibold text-sm text-foreground">Incluso no pacote</h4>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Coffee className="h-3 w-3" />
+                      <span>Café da manhã incluso</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>Duração: {Math.ceil(trip.duration_hours / 24)} {Math.ceil(trip.duration_hours / 24) === 1 ? 'dia' : 'dias'} em cada excursão</span>
+                    </div>
                   </div>
                 </div>
 
