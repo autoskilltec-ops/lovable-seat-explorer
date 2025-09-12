@@ -46,6 +46,7 @@ export default function Checkout() {
   });
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [whatsappUrl, setWhatsappUrl] = useState<string>("");
 
   const tripId = searchParams.get("trip_id");
   const planType = searchParams.get("plan") || "individual";
@@ -57,10 +58,16 @@ export default function Checkout() {
     setFormData(prev => ({ ...prev, planType }));
   }, [tripId, planType]);
 
+  // Limpar URL do WhatsApp quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      setWhatsappUrl("");
+    };
+  }, []);
+
   // Clear selected seats when passenger count changes
   useEffect(() => {
     if (selectedSeats.length > formData.passengers) {
-      // Release temporary holds on seats that are no longer needed
       const seatsToRelease = selectedSeats.slice(formData.passengers);
       if (seatsToRelease.length > 0) {
         supabase
@@ -200,7 +207,6 @@ export default function Checkout() {
         description: "Abrindo WhatsApp e redirecionando para Minhas Reservas...",
       });
 
-      // Navega para a página de Minhas Reservas para exibir a reserva pendente
       navigate("/minhas-reservas");
 
     } catch (error: any) {
@@ -218,7 +224,6 @@ export default function Checkout() {
   const sendToWhatsApp = async (reservation: any) => {
     if (!trip) return;
 
-    // Get seat numbers for WhatsApp message
     let seatNumbers = "A definir";
     if (selectedSeats.length > 0) {
       try {
@@ -262,9 +267,88 @@ export default function Checkout() {
 ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}`;
 
     const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/5586988821090?text=${encodedMessage}`;
+    // Formatar número de telefone corretamente (remover caracteres especiais e garantir formato internacional)
+    const phone = "5586988821090".replace(/\D/g, '');
+
+    // Detecção melhorada de dispositivo móvel
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
     
-    window.open(whatsappUrl, "_blank");
+    let generatedWhatsappUrl = "";
+    let success = false;
+
+    try {
+      if (isMobile) {
+        if (isIOS) {
+          // iOS - tentar app primeiro, depois web
+          generatedWhatsappUrl = `whatsapp://send?phone=${phone}&text=${encodedMessage}`;
+          try {
+            window.location.href = generatedWhatsappUrl;
+            success = true;
+          } catch (error) {
+            // Fallback para web no iOS
+            generatedWhatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+            window.open(generatedWhatsappUrl, '_blank');
+            success = true;
+          }
+        } else if (isAndroid) {
+          // Android - usar wa.me
+          generatedWhatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+          window.open(generatedWhatsappUrl, '_blank');
+          success = true;
+        } else {
+          // Outros dispositivos móveis
+          generatedWhatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+          window.open(generatedWhatsappUrl, '_blank');
+          success = true;
+        }
+      } else {
+        // Desktop - usar web.whatsapp.com
+        generatedWhatsappUrl = `https://web.whatsapp.com/send?phone=${phone}&text=${encodedMessage}`;
+        const newWindow = window.open(generatedWhatsappUrl, '_blank', 'noopener,noreferrer');
+        
+        if (newWindow) {
+          success = true;
+          // Verificar se a janela foi bloqueada pelo popup blocker
+          setTimeout(() => {
+            if (newWindow.closed === undefined) {
+              // Popup foi bloqueado, redirecionar na mesma janela
+              window.location.href = generatedWhatsappUrl;
+            }
+          }, 1000);
+        } else {
+          // Popup foi bloqueado, redirecionar na mesma janela
+          window.location.href = generatedWhatsappUrl;
+          success = true;
+        }
+      }
+
+      if (!success) {
+        throw new Error('Não foi possível abrir o WhatsApp');
+      }
+
+    } catch (error) {
+      console.error('Erro ao abrir WhatsApp:', error);
+      
+      // Fallback final - tentar abrir em nova aba
+      try {
+        window.open(generatedWhatsappUrl, '_blank');
+      } catch (fallbackError) {
+        // Último recurso - redirecionar na mesma janela
+        window.location.href = generatedWhatsappUrl;
+      }
+      
+      // Salvar URL para fallback manual
+      setWhatsappUrl(generatedWhatsappUrl);
+      
+      // Mostrar toast de aviso
+      toast({
+        title: "Atenção",
+        description: "Tentando abrir o WhatsApp. Se não abrir automaticamente, clique no link que será exibido.",
+        variant: "default",
+      });
+    }
   };
 
   const handleSubmitWithValidation = async (e: React.FormEvent) => {
@@ -505,30 +589,43 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
                 </div>
 
                 <div className="md:col-span-2">
-                  <Label htmlFor="observations">Observações (opcional)</Label>
+                  <Label htmlFor="observations">Observações</Label>
                   <Textarea
                     id="observations"
-                    placeholder="Alguma informação adicional?"
                     value={formData.observations}
                     onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
                   />
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
+              <Button 
+                type="submit" 
+                className="w-full" 
                 disabled={submitting}
               >
-                {submitting ? (
-                  "Processando..."
-                ) : (
+                {submitting ? "Processando..." : (
                   <>
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    Enviar para WhatsApp
+                    Finalizar e Enviar para WhatsApp
                   </>
                 )}
               </Button>
+
+              {whatsappUrl && (
+                <div className="mt-4 p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Se o WhatsApp não abriu automaticamente, clique no botão abaixo:
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => window.open(whatsappUrl, '_blank')}
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Abrir WhatsApp Manualmente
+                  </Button>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
