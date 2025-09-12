@@ -366,6 +366,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
           maxPassengers={formData.passengers}
           selectedSeats={selectedSeats}
           onSeatSelection={setSelectedSeats}
+          isAdmin={false}
         />
 
         {/* Formulário */}

@@ -27,9 +27,10 @@ interface BusSeatMapProps {
   maxPassengers: number;
   selectedSeats: string[];
   onSeatSelection: (seatIds: string[]) => void;
+  isAdmin?: boolean;
 }
 
-export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection }: BusSeatMapProps) {
+export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection, isAdmin = false }: BusSeatMapProps) {
   const [seats, setSeats] = useState<BusSeat[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [selectedBusId, setSelectedBusId] = useState<string>("");
@@ -76,9 +77,10 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
       setBuses(busData || []);
       
-      // Select first bus by default if none selected and buses exist
+      // Select first available bus by default if none selected and buses exist
       if (busData && busData.length > 0 && !selectedBusId) {
-        setSelectedBusId(busData[0].bus_id);
+        const availableBus = getFirstAvailableBus(busData);
+        setSelectedBusId(availableBus.bus_id);
       }
     } catch (error) {
       console.error("Error fetching buses:", error);
@@ -209,6 +211,51 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     } catch (error) {
       console.error("Erro ao limpar reservas expiradas:", error);
     }
+  };
+
+  // Get the first available bus based on priority rules
+  const getFirstAvailableBus = (busData: Bus[]) => {
+    if (isAdmin) {
+      // Admins can select any bus
+      return busData[0];
+    }
+    
+    // For regular users, apply priority rules
+    const sortedBuses = [...busData].sort((a, b) => a.bus_number - b.bus_number);
+    
+    for (const bus of sortedBuses) {
+      if (bus.available_seats > 0) {
+        return bus;
+      }
+    }
+    
+    // If no buses have available seats, return the first one
+    return sortedBuses[0];
+  };
+
+  // Check if a bus can be selected based on priority rules
+  const canSelectBus = (bus: Bus) => {
+    if (isAdmin) {
+      // Admins can select any bus
+      return true;
+    }
+    
+    const sortedBuses = [...buses].sort((a, b) => a.bus_number - b.bus_number);
+    const busIndex = sortedBuses.findIndex(b => b.bus_id === bus.bus_id);
+    
+    // Bus 1 can always be selected if it has available seats
+    if (busIndex === 0) {
+      return bus.available_seats > 0;
+    }
+    
+    // For subsequent buses, check if all previous buses are full
+    for (let i = 0; i < busIndex; i++) {
+      if (sortedBuses[i].available_seats > 0) {
+        return false;
+      }
+    }
+    
+    return bus.available_seats > 0;
   };
 
   const handleSeatClick = async (seat: BusSeat) => {
@@ -466,13 +513,35 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                 <SelectValue placeholder="Escolha um ônibus" />
               </SelectTrigger>
               <SelectContent>
-                {buses.map((bus) => (
-                  <SelectItem key={bus.bus_id} value={bus.bus_id}>
-                    Ônibus {bus.bus_number} - {bus.available_seats} assentos disponíveis
-                  </SelectItem>
-                ))}
+                {buses.map((bus) => {
+                  const canSelect = canSelectBus(bus);
+                  return (
+                    <SelectItem 
+                      key={bus.bus_id} 
+                      value={bus.bus_id}
+                      disabled={!canSelect}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span>Ônibus {bus.bus_number}</span>
+                        <span className="text-sm text-muted-foreground ml-2">
+                          {bus.available_seats} disponíveis
+                        </span>
+                        {!canSelect && !isAdmin && (
+                          <span className="text-xs text-destructive ml-2">
+                            (Aguarde ônibus anterior encher)
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {!isAdmin && (
+              <p className="text-xs text-muted-foreground">
+                Os ônibus são liberados por ordem de prioridade conforme a lotação
+              </p>
+            )}
           </div>
         )}
 

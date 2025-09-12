@@ -18,6 +18,7 @@ import {
   CreditCard
 } from "lucide-react";
 import BusSeatMap from "../BusSeatMap";
+import SeatReallocation from "./SeatReallocation";
 
 interface Reservation {
   id: string;
@@ -404,6 +405,7 @@ const ReservationManagement = () => {
                               maxPassengers={reservation.seat_ids.length}
                               selectedSeats={reservation.seat_ids}
                               onSeatSelection={() => {}}
+                              isAdmin={false}
                             />
                           </div>
                         )}
@@ -426,6 +428,15 @@ const ReservationManagement = () => {
                           >
                             {canceling === reservation.id ? "Cancelando..." : "Cancelar Reserva"}
                           </Button>
+                          {reservation.seat_ids && reservation.seat_ids.length > 0 && (
+                            <SeatReallocation
+                              reservationId={reservation.id}
+                              tripId={reservation.trip.id}
+                              currentSeatIds={reservation.seat_ids}
+                              maxPassengers={reservation.passengers}
+                              onReallocationComplete={fetchReservations}
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -499,6 +510,15 @@ const ReservationManagement = () => {
                             {canceling === reservation.id ? "Cancelando..." : "Cancelar"}
                           </Button>
                         )}
+                        {reservation.seat_ids && reservation.seat_ids.length > 0 && (
+                          <SeatReallocation
+                            reservationId={reservation.id}
+                            tripId={reservation.trip.id}
+                            currentSeatIds={reservation.seat_ids}
+                            maxPassengers={reservation.passengers}
+                            onReallocationComplete={fetchReservations}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -557,6 +577,15 @@ const ReservationManagement = () => {
                         >
                           {canceling === reservation.id ? "Cancelando..." : "Cancelar"}
                         </Button>
+                      )}
+                      {reservation.seat_ids && reservation.seat_ids.length > 0 && (
+                        <SeatReallocation
+                          reservationId={reservation.id}
+                          tripId={reservation.trip.id}
+                          currentSeatIds={reservation.seat_ids}
+                          maxPassengers={reservation.passengers}
+                          onReallocationComplete={fetchReservations}
+                        />
                       )}
                     </div>
                   </div>
