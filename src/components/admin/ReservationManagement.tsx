@@ -287,6 +287,14 @@ const ReservationManagement = () => {
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
+  const handleManageReservation = (reservationId: string) => {
+    // Navigate to the reservations tab with focus on the specific reservation
+    const reservationElement = document.getElementById(`reservation-${reservationId}`);
+    if (reservationElement) {
+      reservationElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   const groupedReservations = reservations.reduce((acc, reservation) => {
     const destination = `${reservation.trip.destination.name} - ${reservation.trip.destination.state}`;
     if (!acc[destination]) {
@@ -310,11 +318,11 @@ const ReservationManagement = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold text-gradient">Gerenciamento de Reservas</h2>
-        <div className="flex gap-4">
-          <Badge variant="outline" className="glass-surface border-glass-border/50">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+          <Badge variant="outline" className="glass-surface border-glass-border/50 whitespace-nowrap">
             Total: {reservations.length}
           </Badge>
-          <Badge variant="outline" className="glass-surface border-glass-border/50">
+          <Badge variant="outline" className="glass-surface border-glass-border/50 whitespace-nowrap">
             Pendentes: {pendingReservations.length}
           </Badge>
         </div>
@@ -337,7 +345,7 @@ const ReservationManagement = () => {
             ) : (
               <div className="space-y-4">
                 {pendingReservations.map((reservation) => (
-                  <div key={reservation.id} className="glass-surface p-4 rounded-lg border border-glass-border/30">
+                  <div id={`reservation-${reservation.id}`} key={reservation.id} className="glass-surface p-4 rounded-lg border border-glass-border/30">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       {/* Informações da Reserva */}
                       <div className="space-y-3">
@@ -409,34 +417,38 @@ const ReservationManagement = () => {
                             />
                           </div>
                         )}
-                        <div className="flex gap-2 mt-4">
+                        <div className="space-y-3 mt-4">
                           {getStatusBadge(reservation.status)}
-                          <Button
-                            size="sm"
-                            onClick={() => confirmReservation(reservation.id)}
-                            disabled={confirming === reservation.id}
-                            className="glass-button border-0"
-                          >
-                            {confirming === reservation.id ? "Confirmando..." : "Confirmar Reserva"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => cancelReservation(reservation.id)}
-                            disabled={canceling === reservation.id}
-                            className="glass-surface border-glass-border/50 hover:glass-hover text-destructive"
-                          >
-                            {canceling === reservation.id ? "Cancelando..." : "Cancelar Reserva"}
-                          </Button>
-                          {reservation.seat_ids && reservation.seat_ids.length > 0 && (
-                            <SeatReallocation
-                              reservationId={reservation.id}
-                              tripId={reservation.trip.id}
-                              currentSeatIds={reservation.seat_ids}
-                              maxPassengers={reservation.passengers}
-                              onReallocationComplete={fetchReservations}
-                            />
-                          )}
+                          <div className="flex flex-col sm:flex-row gap-2 w-full">
+                            <Button
+                              size="sm"
+                              onClick={() => confirmReservation(reservation.id)}
+                              disabled={confirming === reservation.id}
+                              className="glass-button border-0 flex-1 sm:flex-initial whitespace-nowrap"
+                            >
+                              {confirming === reservation.id ? "Confirmando..." : "Confirmar"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => cancelReservation(reservation.id)}
+                              disabled={canceling === reservation.id}
+                              className="glass-surface border-glass-border/50 hover:glass-hover text-destructive flex-1 sm:flex-initial whitespace-nowrap"
+                            >
+                              {canceling === reservation.id ? "Cancelando..." : "Cancelar"}
+                            </Button>
+                            {reservation.seat_ids && reservation.seat_ids.length > 0 && (
+                              <div className="w-full sm:w-auto">
+                                <SeatReallocation
+                                  reservationId={reservation.id}
+                                  tripId={reservation.trip.id}
+                                  currentSeatIds={reservation.seat_ids}
+                                  maxPassengers={reservation.passengers}
+                                  onReallocationComplete={fetchReservations}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
