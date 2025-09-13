@@ -3,30 +3,14 @@ import { Button } from "@/components/ui/button";
 import { MapPin, User, Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/integrations/supabase/client";
 
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const isAdmin = profile?.role === 'admin';
+  const { isAdmin } = useAdmin();
 
   const navItems = isAdmin ? [
     { href: "/home", label: "Início" },

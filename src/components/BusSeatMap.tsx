@@ -28,9 +28,12 @@ interface BusSeatMapProps {
   selectedSeats: string[];
   onSeatSelection: (seatIds: string[]) => void;
   isAdmin?: boolean;
+  isReallocation?: boolean; // New prop to indicate if this is for seat reallocation
+  showOnlyReservationBus?: boolean; // New prop to show only the bus with the reservation
+  reservationBusId?: string; // ID of the bus that contains the reservation
 }
 
-export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection, isAdmin = false }: BusSeatMapProps) {
+export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection, isAdmin = false, isReallocation = false, showOnlyReservationBus = false, reservationBusId }: BusSeatMapProps) {
   const [seats, setSeats] = useState<BusSeat[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [selectedBusId, setSelectedBusId] = useState<string>("");
@@ -38,9 +41,24 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchBusesAndData();
+    let isMounted = true;
+    
+    const initializeData = async () => {
+      try {
+        await fetchBusesAndData();
+      } catch (error) {
+        console.error("Error initializing bus data:", error);
+      }
+    };
+    
+    initializeData();
+    
     // Clean expired holds every 30 seconds
-    const interval = setInterval(cleanExpiredHolds, 30000);
+    const interval = setInterval(() => {
+      if (isMounted) {
+        cleanExpiredHolds();
+      }
+    }, 30000);
     
     // Realtime: listen to seat updates for this trip and refresh UI
     const channel = supabase.channel(`bus_seats_trip_${tripId}`)
@@ -50,37 +68,83 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         table: 'bus_seats',
         filter: `trip_id=eq.${tripId}`
       }, () => {
-        fetchBusesAndData();
+        if (isMounted) {
+          fetchBusesAndData();
+        }
       })
       .subscribe();
 
     return () => {
+      isMounted = false;
       clearInterval(interval);
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.error("Error removing channel:", error);
+      }
     };
   }, [tripId]);
 
   // When bus selection changes, fetch seats for that bus
   useEffect(() => {
     if (selectedBusId) {
+      // Clear current selections when switching buses to prevent DOM issues
+      onSeatSelection([]);
       fetchSeatsForBus(selectedBusId);
     }
   }, [selectedBusId]);
 
   const fetchBusesAndData = async () => {
     try {
-      // Fetch buses for this trip using the custom function
-      const { data: busData, error: busError } = await supabase
-        .rpc('get_trip_buses', { trip_uuid: tripId });
+      if (showOnlyReservationBus && reservationBusId) {
+        // Se estamos mostrando apenas o ônibus da reserva, buscar apenas esse ônibus
+        const { data: busData, error: busError } = await supabase
+          .from('buses')
+          .select(`
+            id,
+            bus_number,
+            bus_seats!inner (
+              id,
+              seat_number,
+              status,
+              reserved_until
+            )
+          `)
+          .eq('id', reservationBusId)
+          .single();
 
-      if (busError) throw busError;
+        if (busError) throw busError;
 
-      setBuses(busData || []);
-      
-      // Select first available bus by default if none selected and buses exist
-      if (busData && busData.length > 0 && !selectedBusId) {
-        const availableBus = getFirstAvailableBus(busData);
-        setSelectedBusId(availableBus.bus_id);
+        // Calcular estatísticas do ônibus
+        const seats = busData.bus_seats || [];
+        const totalSeats = seats.length;
+        const availableSeats = seats.filter(s => s.status === 'disponivel').length;
+        const occupiedSeats = seats.filter(s => s.status === 'ocupado').length;
+
+        const busInfo = {
+          bus_id: busData.id,
+          bus_number: busData.bus_number,
+          total_seats: totalSeats,
+          available_seats: availableSeats,
+          occupied_seats: occupiedSeats
+        };
+
+        setBuses([busInfo]);
+        setSelectedBusId(busData.id);
+      } else {
+        // Buscar todos os ônibus da viagem (comportamento normal)
+        const { data: busData, error: busError } = await supabase
+          .rpc('get_trip_buses', { trip_uuid: tripId });
+
+        if (busError) throw busError;
+
+        setBuses(busData || []);
+        
+        // Select first available bus by default if none selected and buses exist
+        if (busData && busData.length > 0 && !selectedBusId) {
+          const availableBus = getFirstAvailableBus(busData);
+          setSelectedBusId(availableBus.bus_id);
+        }
       }
     } catch (error) {
       console.error("Error fetching buses:", error);
@@ -304,9 +368,13 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     } else {
       // Add seat if not at max capacity
       if (selectedSeats.length >= maxPassengers) {
+        const message = isReallocation 
+          ? `Esta reserva possui ${maxPassengers} assento(s). Desmarque um assento atual antes de selecionar outro.`
+          : `Você pode selecionar no máximo ${maxPassengers} assento(s)`;
+        
         toast({
           title: "Limite atingido",
-          description: `Você pode selecionar no máximo ${maxPassengers} assento(s)`,
+          description: message,
           variant: "destructive",
         });
         return;
@@ -352,7 +420,10 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
       })();
     }
 
-    onSeatSelection(newSelectedSeats);
+    // Use setTimeout to prevent DOM manipulation issues
+    setTimeout(() => {
+      onSeatSelection(newSelectedSeats);
+    }, 0);
   };
 
   const getSeatColor = (seat: BusSeat) => {
@@ -397,26 +468,51 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
             const rightPairNumbers = [base + 3, base + 4];
             const leftPair = leftPairNumbers
               .filter(n => n <= totalSeatsToShow)
-              .map(n => seatByNumber.get(n) || ({ id: `virtual-${n}`, seat_number: n, status: 'disponivel' as const } as BusSeat));
+              .map(n => {
+                const realSeat = seatByNumber.get(n);
+                if (realSeat) return realSeat;
+                // Create a virtual seat that won't cause DOM issues
+                return { 
+                  id: `virtual-${n}-${selectedBusId || 'default'}`, 
+                  seat_number: n, 
+                  status: 'disponivel' as const,
+                  bus_id: selectedBusId 
+                } as BusSeat;
+              });
             const rightPair = rightPairNumbers
               .filter(n => n <= totalSeatsToShow)
-              .map(n => seatByNumber.get(n) || ({ id: `virtual-${n}`, seat_number: n, status: 'disponivel' as const } as BusSeat));
+              .map(n => {
+                const realSeat = seatByNumber.get(n);
+                if (realSeat) return realSeat;
+                // Create a virtual seat that won't cause DOM issues
+                return { 
+                  id: `virtual-${n}-${selectedBusId || 'default'}`, 
+                  seat_number: n, 
+                  status: 'disponivel' as const,
+                  bus_id: selectedBusId 
+                } as BusSeat;
+              });
 
             return (
-              <div key={rowIndex} className="flex justify-between items-center gap-8">
+              <div key={`row-${rowIndex}-${selectedBusId || 'default'}`} className="flex justify-between items-center gap-8">
                 {/* Left side seats */}
                 <div className="flex gap-1">
                   {leftPair.map(seat => (
                     <Button
-                      key={seat.id}
+                      key={`left-${seat.id}`}
                       variant="outline"
                       size="sm"
                       className={cn(
                         "h-8 w-8 p-0 text-xs font-mono",
                         getSeatColor(seat)
                       )}
-                      onClick={() => handleSeatClick(seat)}
-                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id))}
+                      onClick={() => {
+                        // Only handle clicks on real seats, not virtual ones
+                        if (!seat.id.startsWith('virtual-')) {
+                          handleSeatClick(seat);
+                        }
+                      }}
+                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -430,15 +526,20 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                 <div className="flex gap-1">
                   {rightPair.map(seat => (
                     <Button
-                      key={seat.id}
+                      key={`right-${seat.id}`}
                       variant="outline"
                       size="sm"
                       className={cn(
                         "h-8 w-8 p-0 text-xs font-mono",
                         getSeatColor(seat)
                       )}
-                      onClick={() => handleSeatClick(seat)}
-                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id))}
+                      onClick={() => {
+                        // Only handle clicks on real seats, not virtual ones
+                        if (!seat.id.startsWith('virtual-')) {
+                          handleSeatClick(seat);
+                        }
+                      }}
+                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -495,17 +596,25 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
       <CardHeader>
         <CardTitle>Seleção de Assentos</CardTitle>
         <CardDescription>
-          Selecione {maxPassengers} assento(s) para sua viagem
+          {isReallocation 
+            ? `Realocação de Assentos: Mantenha exatamente ${maxPassengers} assento(s)`
+            : `Selecione ${maxPassengers} assento(s) para sua viagem`
+          }
           {selectedSeats.length > 0 && (
             <span className="block mt-1 text-primary font-medium">
               {selectedSeats.length}/{maxPassengers} assento(s) selecionado(s)
+              {isReallocation && selectedSeats.length !== maxPassengers && (
+                <span className="text-destructive ml-2">
+                  (Deve ser exatamente {maxPassengers})
+                </span>
+              )}
             </span>
           )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Bus Selection */}
-        {buses.length > 1 && (
+        {buses.length > 1 && !showOnlyReservationBus && (
           <div className="space-y-2">
             <label className="text-sm font-medium">Selecione o Ônibus:</label>
             <Select value={selectedBusId} onValueChange={setSelectedBusId}>

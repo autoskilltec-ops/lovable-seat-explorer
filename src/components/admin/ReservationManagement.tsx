@@ -42,6 +42,13 @@ interface Reservation {
       state: string;
     };
   };
+  bus_data?: {
+    bus_id: string;
+    bus_number: number;
+    total_seats: number;
+    available_seats: number;
+    occupied_seats: number;
+  };
 }
 
 const ReservationManagement = () => {
@@ -58,7 +65,10 @@ const ReservationManagement = () => {
 
   const fetchReservations = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      
+      // Buscar reservas básicas primeiro
+      const { data: reservationsData, error: reservationsError } = await supabase
         .from('reservations')
         .select(`
           *,
@@ -75,8 +85,37 @@ const ReservationManagement = () => {
         .not('user_id', 'is', null) // Apenas reservas com user_id (excluindo reservas administrativas)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setReservations(data || []);
+      if (reservationsError) throw reservationsError;
+
+      // Buscar dados dos ônibus para cada reserva que tem assentos
+      const reservationsWithBusData = await Promise.all(
+        (reservationsData || []).map(async (reservation) => {
+          if (!reservation.seat_ids || reservation.seat_ids.length === 0) {
+            return reservation;
+          }
+
+          try {
+            // Buscar dados do ônibus da reserva
+            const { data: busData, error: busError } = await supabase
+              .rpc('get_reservation_bus_data', { reservation_id: reservation.id });
+
+            if (busError) {
+              console.error('Erro ao buscar dados do ônibus:', busError);
+              return reservation;
+            }
+
+            return {
+              ...reservation,
+              bus_data: busData?.[0] || null
+            };
+          } catch (error) {
+            console.error('Erro ao buscar dados do ônibus para reserva:', reservation.id, error);
+            return reservation;
+          }
+        })
+      );
+
+      setReservations(reservationsWithBusData);
     } catch (error) {
       console.error('Erro ao buscar reservas:', error);
       toast({
@@ -403,6 +442,36 @@ const ReservationManagement = () => {
                         </div>
                       </div>
 
+                      {/* Dados do Ônibus */}
+                      {reservation.bus_data && (
+                        <div className="glass-surface p-4 rounded-lg border border-glass-border/30 mb-4">
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Ônibus {reservation.bus_data.bus_number}
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Total:</span>
+                              <span className="font-medium">{reservation.bus_data.total_seats}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Disponíveis:</span>
+                              <span className="font-medium text-green-600">{reservation.bus_data.available_seats}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Ocupados:</span>
+                              <span className="font-medium text-destructive">{reservation.bus_data.occupied_seats}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Ocupação:</span>
+                              <span className="font-medium">
+                                {Math.round((reservation.bus_data.occupied_seats / reservation.bus_data.total_seats) * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Assentos e Ações */}
                       <div className="space-y-3">
                         {reservation.seat_ids && reservation.seat_ids.length > 0 && (
@@ -414,6 +483,8 @@ const ReservationManagement = () => {
                               selectedSeats={reservation.seat_ids}
                               onSeatSelection={() => {}}
                               isAdmin={false}
+                              showOnlyReservationBus={true}
+                              reservationBusId={reservation.bus_data?.bus_id}
                             />
                           </div>
                         )}

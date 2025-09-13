@@ -15,6 +15,7 @@ import MinhasReservas from "./pages/MinhasReservas";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 import { AuthProvider } from "./hooks/useAuth";
 
 const queryClient = new QueryClient({
@@ -68,7 +69,9 @@ const App = () => (
               } />
               <Route path="/admin" element={
                 <ProtectedRoute>
-                  <Layout><Admin /></Layout>
+                  <AdminRoute>
+                    <Layout><Admin /></Layout>
+                  </AdminRoute>
                 </ProtectedRoute>
               } />
               

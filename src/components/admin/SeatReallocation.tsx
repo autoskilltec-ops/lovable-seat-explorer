@@ -32,11 +32,26 @@ export default function SeatReallocation({
     }
   }, [isOpen, currentSeatIds]);
 
+  // Custom seat selection handler that enforces the original quantity
+  const handleSeatSelection = (newSeatIds: string[]) => {
+    // If trying to select more than the original quantity, show error
+    if (newSeatIds.length > maxPassengers) {
+      toast({
+        title: "Limite de Assentos",
+        description: `Esta reserva possui ${maxPassengers} assento(s). Você deve manter a mesma quantidade ao realocar.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setSelectedSeats(newSeatIds);
+  };
+
   const handleSaveReallocation = async () => {
     if (selectedSeats.length !== maxPassengers) {
       toast({
-        title: "Erro",
-        description: `Você deve selecionar exatamente ${maxPassengers} assento(s)`,
+        title: "Quantidade Incorreta",
+        description: `Você deve selecionar exatamente ${maxPassengers} assento(s) para manter a quantidade original da reserva`,
         variant: "destructive",
       });
       return;
@@ -114,15 +129,24 @@ export default function SeatReallocation({
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Selecione {maxPassengers} assento(s) para esta reserva. Como administrador, você pode selecionar assentos de qualquer ônibus.
+            <strong>Realocação de Assentos:</strong> Esta reserva possui {maxPassengers} assento(s). 
+            Você deve manter exatamente a mesma quantidade ao realocar. 
+            Como administrador, você pode selecionar assentos de qualquer ônibus disponível.
           </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-800">
+              <strong>Instruções:</strong> Desmarque os assentos atuais e selecione novos assentos. 
+              A quantidade deve permanecer sempre igual a {maxPassengers} assento(s).
+            </p>
+          </div>
           
           <BusSeatMap
             tripId={tripId}
             maxPassengers={maxPassengers}
             selectedSeats={selectedSeats}
-            onSeatSelection={setSelectedSeats}
+            onSeatSelection={handleSeatSelection}
             isAdmin={true}
+            isReallocation={true}
           />
           
           <div className="flex justify-end gap-2 pt-4">
@@ -137,7 +161,7 @@ export default function SeatReallocation({
               onClick={handleSaveReallocation}
               disabled={saving || selectedSeats.length !== maxPassengers}
             >
-              {saving ? "Salvando..." : "Salvar Alterações"}
+              {saving ? "Salvando..." : `Salvar Alterações (${selectedSeats.length}/${maxPassengers})`}
             </Button>
           </div>
         </div>

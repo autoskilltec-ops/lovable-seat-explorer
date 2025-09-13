@@ -144,14 +144,26 @@ export default function Checkout() {
         return;
       }
 
-      // Criar perfil se não existir
+      // Criar perfil se não existir (apenas para autenticação)
       await supabase
         .from("profiles")
         .upsert({
           user_id: user.id,
-          email: formData.customerEmail,
-          full_name: formData.customerName,
-          phone: formData.customerPhone,
+          email: user.email || formData.customerEmail,
+          full_name: user.user_metadata?.full_name || formData.customerName,
+          phone: user.user_metadata?.phone || formData.customerPhone,
+        });
+
+      // Salvar dados do cliente na tabela separada (versão temporária)
+      await supabase
+        .from("customer_data")
+        .upsert({
+          user_id: user.id,
+          customer_name: formData.customerName,
+          customer_phone: formData.customerPhone,
+          customer_email: formData.customerEmail,
+          customer_cpf: formData.customerCpf,
+          emergency_contact: formData.emergencyContact,
         });
 
       // Criar reserva
