@@ -22,20 +22,88 @@ export default function SeatReallocation({
   onReallocationComplete 
 }: SeatReallocationProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedSeats, setSelectedSeats] = useState<string[]>(currentSeatIds);
+  const [selectedSeats, setSelectedSeats] = useState<Set<string>>(new Set(currentSeatIds));
+  const [reservationSeats, setReservationSeats] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  // Carregar assentos da reserva quando o modal abrir
   useEffect(() => {
     if (isOpen) {
-      setSelectedSeats(currentSeatIds);
+      loadReservationSeats();
     }
-  }, [isOpen, currentSeatIds]);
+  }, [isOpen, reservationId]);
 
-  // Custom seat selection handler that enforces the original quantity
+  // Carregar assentos já vinculados à reserva
+  const loadReservationSeats = async () => {
+    setLoading(true);
+    try {
+      // Buscar os assentos da reserva diretamente da tabela reservations
+      const { data: reservation, error } = await supabase
+        .from("reservations")
+        .select("seat_ids")
+        .eq("id", reservationId)
+        .single();
+
+      if (error) {
+        console.error("Erro ao carregar assentos da reserva:", error);
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar assentos da reserva",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const seatIds = reservation?.seat_ids || [];
+      setReservationSeats(seatIds);
+      setSelectedSeats(new Set(seatIds));
+    } catch (error) {
+      console.error("Erro ao carregar assentos da reserva:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar assentos da reserva",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Função para toggle de assentos (adicionar/remover)
+  const toggleSeat = (seatId: string) => {
+    setSelectedSeats(prev => {
+      const newSelectedSeats = new Set(prev);
+      
+      if (newSelectedSeats.has(seatId)) {
+        // Remover assento se já estiver selecionado
+        newSelectedSeats.delete(seatId);
+      } else {
+        // Adicionar assento se não estiver selecionado
+        // Verificar se não excede o limite
+        if (newSelectedSeats.size >= maxPassengers) {
+          toast({
+            title: "Limite de Assentos",
+            description: `Esta reserva possui ${maxPassengers} assento(s). Você deve manter a mesma quantidade ao realocar.`,
+            variant: "destructive",
+          });
+          return prev;
+        }
+        newSelectedSeats.add(seatId);
+      }
+      
+      return newSelectedSeats;
+    });
+  };
+
+  // Handler para seleção de assentos do BusSeatMap
   const handleSeatSelection = (newSeatIds: string[]) => {
-    // If trying to select more than the original quantity, show error
-    if (newSeatIds.length > maxPassengers) {
+    // Converter array para Set para manter consistência
+    const newSelectedSeats = new Set(newSeatIds);
+    
+    // Verificar se não excede o limite
+    if (newSelectedSeats.size > maxPassengers) {
       toast({
         title: "Limite de Assentos",
         description: `Esta reserva possui ${maxPassengers} assento(s). Você deve manter a mesma quantidade ao realocar.`,
@@ -44,14 +112,15 @@ export default function SeatReallocation({
       return;
     }
     
-    setSelectedSeats(newSeatIds);
+    setSelectedSeats(newSelectedSeats);
   };
 
   const handleSaveReallocation = async () => {
-    if (selectedSeats.length !== maxPassengers) {
+    // Validar quantidade de assentos selecionados
+    if (selectedSeats.size !== maxPassengers) {
       toast({
         title: "Quantidade Incorreta",
-        description: `Você deve selecionar exatamente ${maxPassengers} assento(s) para manter a quantidade original da reserva`,
+        description: `Você deve selecionar exatamente ${maxPassengers} assento(s) para manter a quantidade original da reserva. Atualmente selecionados: ${selectedSeats.size}`,
         variant: "destructive",
       });
       return;
@@ -59,38 +128,53 @@ export default function SeatReallocation({
 
     setSaving(true);
     try {
-      // First, release the old seats
-      if (currentSeatIds.length > 0) {
-        await supabase
+      const selectedSeatsArray = Array.from(selectedSeats);
+      
+      // Primeiro, liberar os assentos antigos
+      if (reservationSeats.length > 0) {
+        const { error: releaseError } = await supabase
           .from("bus_seats")
           .update({ 
             status: 'disponivel',
             reserved_until: null 
           })
-          .in("id", currentSeatIds);
+          .in("id", reservationSeats);
+
+        if (releaseError) {
+          console.error("Erro ao liberar assentos antigos:", releaseError);
+          throw releaseError;
+        }
       }
 
-      // Then, occupy the new seats
-      if (selectedSeats.length > 0) {
-        await supabase
+      // Depois, ocupar os novos assentos
+      if (selectedSeatsArray.length > 0) {
+        const { error: occupyError } = await supabase
           .from("bus_seats")
           .update({ 
             status: 'ocupado',
             reserved_until: null 
           })
-          .in("id", selectedSeats);
+          .in("id", selectedSeatsArray);
+
+        if (occupyError) {
+          console.error("Erro ao ocupar novos assentos:", occupyError);
+          throw occupyError;
+        }
       }
 
-      // Update the reservation
+      // Atualizar a reserva com os novos assentos
       const { error: reservationError } = await supabase
         .from("reservations")
         .update({ 
-          seat_ids: selectedSeats,
+          seat_ids: selectedSeatsArray,
           updated_at: new Date().toISOString()
         })
         .eq("id", reservationId);
 
-      if (reservationError) throw reservationError;
+      if (reservationError) {
+        console.error("Erro ao atualizar reserva:", reservationError);
+        throw reservationError;
+      }
 
       toast({
         title: "Sucesso",
@@ -103,7 +187,7 @@ export default function SeatReallocation({
       console.error("Erro ao realocar assentos:", error);
       toast({
         title: "Erro",
-        description: "Erro ao realocar assentos",
+        description: "Erro ao realocar assentos. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -128,42 +212,64 @@ export default function SeatReallocation({
           <DialogTitle>Realocar Assentos da Reserva</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            <strong>Realocação de Assentos:</strong> Esta reserva possui {maxPassengers} assento(s). 
-            Você deve manter exatamente a mesma quantidade ao realocar. 
-            Como administrador, você pode selecionar assentos de qualquer ônibus disponível.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-blue-800">
-              <strong>Instruções:</strong> Desmarque os assentos atuais e selecione novos assentos. 
-              A quantidade deve permanecer sempre igual a {maxPassengers} assento(s).
-            </p>
-          </div>
-          
-          <BusSeatMap
-            tripId={tripId}
-            maxPassengers={maxPassengers}
-            selectedSeats={selectedSeats}
-            onSeatSelection={handleSeatSelection}
-            isAdmin={true}
-            isReallocation={true}
-          />
-          
-          <div className="flex justify-end gap-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsOpen(false)}
-              disabled={saving}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveReallocation}
-              disabled={saving || selectedSeats.length !== maxPassengers}
-            >
-              {saving ? "Salvando..." : `Salvar Alterações (${selectedSeats.length}/${maxPassengers})`}
-            </Button>
-          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <span className="ml-2">Carregando assentos da reserva...</span>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                <strong>Realocação de Assentos:</strong> Esta reserva possui {maxPassengers} assento(s). 
+                Você deve manter exatamente a mesma quantidade ao realocar. 
+                Como administrador, você pode selecionar assentos de qualquer ônibus disponível.
+              </p>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Instruções:</strong> Desmarque os assentos atuais e selecione novos assentos. 
+                  A quantidade deve permanecer sempre igual a {maxPassengers} assento(s).
+                </p>
+              </div>
+
+              {/* Informações sobre assentos selecionados */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm text-gray-700">
+                  <strong>Assentos Selecionados:</strong> {selectedSeats.size} de {maxPassengers} assentos
+                </p>
+                {selectedSeats.size > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    IDs dos assentos: {Array.from(selectedSeats).join(", ")}
+                  </p>
+                )}
+              </div>
+              
+              <BusSeatMap
+                tripId={tripId}
+                maxPassengers={maxPassengers}
+                selectedSeats={Array.from(selectedSeats)}
+                onSeatSelection={handleSeatSelection}
+                isAdmin={true}
+                isReallocation={true}
+              />
+              
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsOpen(false)}
+                  disabled={saving}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleSaveReallocation}
+                  disabled={saving || selectedSeats.size !== maxPassengers}
+                >
+                  {saving ? "Salvando..." : `Salvar Alterações (${selectedSeats.size}/${maxPassengers})`}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
