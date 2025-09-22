@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit, Bed, Wind, Wifi, Coffee, Clock } from "lucide-react";
+import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit, Bed, Wind, Wifi, Coffee, Clock, Trash2 } from "lucide-react";
 
 interface Destination {
   id: string;
@@ -79,8 +79,10 @@ export default function Destinos() {
   const [isAddTripDialogOpen, setIsAddTripDialogOpen] = useState(false);
   const [isEditDestinationOpen, setIsEditDestinationOpen] = useState(false);
   const [isEditTripDialogOpen, setIsEditTripDialogOpen] = useState(false);
+  const [isDeleteTripDialogOpen, setIsDeleteTripDialogOpen] = useState(false);
   const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [deletingTrip, setDeletingTrip] = useState<Trip | null>(null);
   const [newDestination, setNewDestination] = useState<NewDestinationForm>({
     name: "",
     state: "",
@@ -236,6 +238,46 @@ export default function Destinos() {
       duration_hours: trip.duration_hours.toString()
     });
     setIsEditTripDialogOpen(true);
+  };
+
+  const handleDeleteTrip = (trip: Trip) => {
+    setDeletingTrip(trip);
+    setIsDeleteTripDialogOpen(true);
+  };
+
+  const confirmDeleteTrip = async () => {
+    if (!deletingTrip || !deletingTrip.id) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma data selecionada para exclusão.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('delete_trip_cascade', {
+        trip_uuid: deletingTrip.id
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Data excluída com sucesso! Todas as reservas e dados relacionados foram removidos.",
+      });
+
+      setDeletingTrip(null);
+      setIsDeleteTripDialogOpen(false);
+      fetchTrips();
+    } catch (error) {
+      console.error("Erro ao excluir data:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir data. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleUpdateTrip = async () => {
@@ -756,6 +798,47 @@ export default function Destinos() {
           </DialogContent>
         </Dialog>
 
+        {/* Dialog para confirmar exclusão de viagem */}
+        <Dialog open={isDeleteTripDialogOpen} onOpenChange={setIsDeleteTripDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Confirmar Exclusão</DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja excluir esta data de viagem?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {deletingTrip && (
+                <div className="space-y-2">
+                  <p><strong>Data:</strong> {formatDate(deletingTrip.departure_date)} - {formatDate(deletingTrip.return_date)}</p>
+                  <p><strong>Destino:</strong> {deletingTrip.destination.name}</p>
+                  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mt-4">
+                    <p className="text-sm text-destructive font-medium mb-2">⚠️ Esta ação não pode ser desfeita!</p>
+                    <p className="text-sm text-muted-foreground">
+                      Ao excluir esta data, todos os dados relacionados serão removidos permanentemente:
+                    </p>
+                    <ul className="text-sm text-muted-foreground mt-2 ml-4 list-disc">
+                      <li>Todas as reservas desta data</li>
+                      <li>Todos os assentos dos ônibus</li>
+                      <li>Todos os ônibus designados</li>
+                      <li>Todos os pagamentos relacionados</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDeleteTripDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteTrip}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Sim, Excluir Data
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="mb-6">
           <Button 
             variant="outline" 
@@ -903,18 +986,31 @@ export default function Destinos() {
                       Reservar Esta Data
                     </Button>
                   </Link>
-                  {isAdmin && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleEditTrip(trip);
-                      }}
-                      className="px-3"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                  {isAdmin && trip.id && (
+                    <div className="flex gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleEditTrip(trip);
+                        }}
+                        className="px-3"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleDeleteTrip(trip);
+                        }}
+                        className="px-3"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>

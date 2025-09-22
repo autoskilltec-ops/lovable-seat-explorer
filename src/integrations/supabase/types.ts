@@ -416,6 +416,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      delete_trip_cascade: {
+        Args: { trip_uuid: string }
+        Returns: undefined
+      }
       generate_confirmation_code: {
         Args: Record<PropertyKey, never>
         Returns: string
