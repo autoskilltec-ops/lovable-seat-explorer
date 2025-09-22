@@ -151,9 +151,40 @@ export default function Destinos() {
         .order("departure_date", { ascending: true });
 
       if (error) throw error;
-      setTrips(data || []);
+      
+      // Se não há trips, buscar apenas os destinos para exibi-los
+      if (!data || data.length === 0) {
+        const { data: destinationsData, error: destError } = await supabase
+          .from("destinations")
+          .select("*")
+          .order("name");
+        
+        if (destError) throw destError;
+        
+        // Criar trips vazias para cada destino para exibição
+        const emptyTrips = destinationsData?.map(dest => ({
+          id: "",
+          departure_date: "",
+          return_date: "",
+          departure_time: "",
+          duration_hours: 0,
+          price_individual: 0,
+          price_couple: 0,
+          price_group: 0,
+          destination: dest
+        })) || [];
+        
+        setTrips(emptyTrips);
+      } else {
+        setTrips(data || []);
+      }
     } catch (error) {
       console.error("Erro ao carregar viagens:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar destinos e viagens",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
