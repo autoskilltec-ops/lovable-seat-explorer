@@ -280,7 +280,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
 
     const encodedMessage = encodeURIComponent(message);
     // Formatar número de telefone corretamente (remover caracteres especiais e garantir formato internacional)
-    const phone = "5586988821090".replace(/\D/g, '');
+    const phone = "5586994419038".replace(/\D/g, '');
 
     // Detecção melhorada de dispositivo móvel
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
