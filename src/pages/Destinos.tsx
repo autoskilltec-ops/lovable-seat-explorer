@@ -142,42 +142,53 @@ export default function Destinos() {
 
   const fetchTrips = async () => {
     try {
-      const { data, error } = await supabase
+      // Primeiro busca todos os destinos
+      const { data: destinationsData, error: destError } = await supabase
+        .from("destinations")
+        .select("*")
+        .order("name");
+      
+      if (destError) throw destError;
+
+      // Depois busca todos os trips
+      const { data: tripsData, error: tripsError } = await supabase
         .from("trips")
-        .select(`
-          *,
-          destination:destinations(*)
-        `)
+        .select("*")
         .order("departure_date", { ascending: true });
 
-      if (error) throw error;
+      if (tripsError) throw tripsError;
+
+      // Combina destinos com trips
+      const allTrips = [];
       
-      // Se não há trips, buscar apenas os destinos para exibi-los
-      if (!data || data.length === 0) {
-        const { data: destinationsData, error: destError } = await supabase
-          .from("destinations")
-          .select("*")
-          .order("name");
+      destinationsData?.forEach(destination => {
+        const destinationTrips = tripsData?.filter(trip => trip.destination_id === destination.id) || [];
         
-        if (destError) throw destError;
-        
-        // Criar trips vazias para cada destino para exibição
-        const emptyTrips = destinationsData?.map(dest => ({
-          id: "",
-          departure_date: "",
-          return_date: "",
-          departure_time: "",
-          duration_hours: 0,
-          price_individual: 0,
-          price_couple: 0,
-          price_group: 0,
-          destination: dest
-        })) || [];
-        
-        setTrips(emptyTrips);
-      } else {
-        setTrips(data || []);
-      }
+        if (destinationTrips.length > 0) {
+          // Se tem trips, adiciona cada trip com o destino
+          destinationTrips.forEach(trip => {
+            allTrips.push({
+              ...trip,
+              destination: destination
+            });
+          });
+        } else {
+          // Se não tem trips, cria um trip vazio para mostrar o destino
+          allTrips.push({
+            id: "",
+            departure_date: "",
+            return_date: "",
+            departure_time: "",
+            duration_hours: 0,
+            price_individual: 0,
+            price_couple: 0,
+            price_group: 0,
+            destination: destination
+          });
+        }
+      });
+      
+      setTrips(allTrips);
     } catch (error) {
       console.error("Erro ao carregar viagens:", error);
       toast({
