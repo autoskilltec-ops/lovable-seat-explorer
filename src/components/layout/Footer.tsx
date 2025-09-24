@@ -50,11 +50,11 @@ const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="h-4 w-4 text-primary" />
-                <span>(85) 9 9999-9999</span>
+                <span>(86) 9 9441-9038</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Mail className="h-4 w-4 text-primary" />
-                <span>contato@domerys.com</span>
+                <span>domerysoficial@gmail.com</span>
               </div>
             </div>
           </div>
