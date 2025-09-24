@@ -64,7 +64,9 @@ const Footer = () => {
             <h3 className="font-semibold text-foreground">Redes Sociais</h3>
             <div className="flex gap-3">
               <a
-                href="#"
+                href="https://www.instagram.com/domerys_tur?igsh=MXhrMmk3aWJsbnJnZQ=="
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center justify-center w-10 h-10 glass-surface rounded-lg hover:glass-hover transition-all duration-200 hover:scale-105"
               >
                 <Instagram className="h-4 w-4 text-primary" />
