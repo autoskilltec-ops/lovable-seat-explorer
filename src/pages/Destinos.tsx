@@ -99,7 +99,7 @@ export default function Destinos() {
     departure_date: "",
     return_date: "",
     departure_time: "06:00",
-    duration_hours: "24",
+    duration_hours: "1",
     price_individual: "",
     price_couple: "",
     price_group: ""
@@ -109,7 +109,7 @@ export default function Destinos() {
     departure_date: "",
     return_date: "",
     departure_time: "06:00",
-    duration_hours: "24",
+    duration_hours: "1",
     price_individual: "",
     price_couple: "",
     price_group: "",
@@ -120,7 +120,7 @@ export default function Destinos() {
     departure_date: "",
     return_date: "",
     departure_time: "06:00",
-    duration_hours: "24",
+    duration_hours: "1",
     includes_accommodation: true,
     includes_breakfast: true
   });
@@ -242,7 +242,7 @@ export default function Destinos() {
       departure_date: trip.departure_date,
       return_date: trip.return_date,
       departure_time: trip.departure_time,
-      duration_hours: trip.duration_hours.toString(),
+      duration_hours: (trip.duration_hours / 24).toString(),
       includes_accommodation: trip.includes_accommodation ?? true,
       includes_breakfast: trip.includes_breakfast ?? true
     });
@@ -307,7 +307,7 @@ export default function Destinos() {
           departure_date: editTripForm.departure_date,
           return_date: editTripForm.return_date,
           departure_time: editTripForm.departure_time,
-          duration_hours: parseInt(editTripForm.duration_hours),
+          duration_hours: parseInt(editTripForm.duration_hours) * 24,
           includes_accommodation: editTripForm.includes_accommodation,
           includes_breakfast: editTripForm.includes_breakfast
         })
@@ -324,7 +324,7 @@ export default function Destinos() {
         departure_date: "",
         return_date: "",
         departure_time: "06:00",
-        duration_hours: "24",
+        duration_hours: "1",
         includes_accommodation: true,
         includes_breakfast: true
       });
@@ -455,7 +455,7 @@ export default function Destinos() {
           departure_date: newTripForDestination.departure_date,
           return_date: newTripForDestination.return_date,
           departure_time: newTripForDestination.departure_time,
-          duration_hours: parseInt(newTripForDestination.duration_hours),
+          duration_hours: parseInt(newTripForDestination.duration_hours) * 24,
           price_individual: parseFloat(newTripForDestination.price_individual),
           price_couple: parseFloat(newTripForDestination.price_couple),
           price_group: parseFloat(newTripForDestination.price_group),
@@ -509,7 +509,7 @@ export default function Destinos() {
         departure_date: "",
         return_date: "",
         departure_time: "06:00",
-        duration_hours: "24",
+        duration_hours: "1",
         price_individual: "",
         price_couple: "",
         price_group: "",
@@ -605,15 +605,15 @@ export default function Destinos() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="new_trip_duration_hours">Duração (horas) *</Label>
+                      <Label htmlFor="new_trip_duration_hours">Duração (dias) *</Label>
                       <Input
                         id="new_trip_duration_hours"
                         type="number"
                         min="1"
-                        max="168"
+                        max="7"
                         value={newTripForDestination.duration_hours}
                         onChange={(e) => setNewTripForDestination({...newTripForDestination, duration_hours: e.target.value})}
-                        placeholder="24"
+                        placeholder="1"
                       />
                     </div>
                   </div>
@@ -786,15 +786,15 @@ export default function Destinos() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit_trip_duration_hours">Duração (horas) *</Label>
+                    <Label htmlFor="edit_trip_duration_hours">Duração (dias) *</Label>
                     <Input
                       id="edit_trip_duration_hours"
                       type="number"
                       min="1"
-                      max="168"
+                      max="7"
                       value={editTripForm.duration_hours}
                       onChange={(e) => setEditTripForm({...editTripForm, duration_hours: e.target.value})}
-                      placeholder="24"
+                      placeholder="1"
                     />
                   </div>
                  </div>
@@ -1190,15 +1190,15 @@ export default function Destinos() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit_trip_duration_hours">Duração (horas) *</Label>
+                  <Label htmlFor="edit_trip_duration_hours">Duração (dias) *</Label>
                   <Input
                     id="edit_trip_duration_hours"
                     type="number"
                     min="1"
-                    max="168"
+                    max="7"
                     value={editTripForm.duration_hours}
                     onChange={(e) => setEditTripForm({...editTripForm, duration_hours: e.target.value})}
-                    placeholder="24"
+                    placeholder="1"
                   />
                 </div>
               </div>
