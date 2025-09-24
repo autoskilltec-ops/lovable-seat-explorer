@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Calendar, MapPin, Users, ArrowLeft, Plus, Edit, Bed, Wind, Wifi, Coffee, Clock, Trash2 } from "lucide-react";
 
@@ -30,6 +31,8 @@ interface Trip {
   price_individual: number;
   price_couple: number;
   price_group: number;
+  includes_accommodation?: boolean;
+  includes_breakfast?: boolean;
   destination: Destination;
 }
 
@@ -66,6 +69,8 @@ interface EditTripForm {
   return_date: string;
   departure_time: string;
   duration_hours: string;
+  includes_accommodation: boolean;
+  includes_breakfast: boolean;
 }
 
 export default function Destinos() {
@@ -115,7 +120,9 @@ export default function Destinos() {
     departure_date: "",
     return_date: "",
     departure_time: "06:00",
-    duration_hours: "24"
+    duration_hours: "24",
+    includes_accommodation: true,
+    includes_breakfast: true
   });
 
   useEffect(() => {
@@ -235,7 +242,9 @@ export default function Destinos() {
       departure_date: trip.departure_date,
       return_date: trip.return_date,
       departure_time: trip.departure_time,
-      duration_hours: trip.duration_hours.toString()
+      duration_hours: trip.duration_hours.toString(),
+      includes_accommodation: trip.includes_accommodation ?? true,
+      includes_breakfast: trip.includes_breakfast ?? true
     });
     setIsEditTripDialogOpen(true);
   };
@@ -298,7 +307,9 @@ export default function Destinos() {
           departure_date: editTripForm.departure_date,
           return_date: editTripForm.return_date,
           departure_time: editTripForm.departure_time,
-          duration_hours: parseInt(editTripForm.duration_hours)
+          duration_hours: parseInt(editTripForm.duration_hours),
+          includes_accommodation: editTripForm.includes_accommodation,
+          includes_breakfast: editTripForm.includes_breakfast
         })
         .eq("id", editingTrip.id);
 
@@ -313,7 +324,9 @@ export default function Destinos() {
         departure_date: "",
         return_date: "",
         departure_time: "06:00",
-        duration_hours: "24"
+        duration_hours: "24",
+        includes_accommodation: true,
+        includes_breakfast: true
       });
       setEditingTrip(null);
       setIsEditTripDialogOpen(false);
@@ -784,8 +797,39 @@ export default function Destinos() {
                       placeholder="24"
                     />
                   </div>
-                </div>
-              </div>
+                 </div>
+
+                 {/* Seção de Inclusões no Pacote */}
+                 <div className="space-y-4">
+                   <h4 className="font-semibold text-sm text-foreground">Opções de Inclusões no Pacote</h4>
+                   <div className="space-y-3">
+                     <div className="flex items-center space-x-3">
+                       <input
+                         type="checkbox"
+                         id="includes_accommodation"
+                         checked={editTripForm.includes_accommodation}
+                         onChange={(e) => setEditTripForm({...editTripForm, includes_accommodation: e.target.checked})}
+                         className="rounded border-gray-300 text-primary focus:ring-primary"
+                       />
+                       <Label htmlFor="includes_accommodation" className="text-sm font-normal">
+                         Hospedagem inclusa (desmarque para viagens "bate e volta")
+                       </Label>
+                     </div>
+                     <div className="flex items-center space-x-3">
+                       <input
+                         type="checkbox"
+                         id="includes_breakfast"
+                         checked={editTripForm.includes_breakfast}
+                         onChange={(e) => setEditTripForm({...editTripForm, includes_breakfast: e.target.checked})}
+                         className="rounded border-gray-300 text-primary focus:ring-primary"
+                       />
+                       <Label htmlFor="includes_breakfast" className="text-sm font-normal">
+                         Café da manhã incluso
+                       </Label>
+                     </div>
+                   </div>
+                 </div>
+               </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setIsEditTripDialogOpen(false)}>
@@ -969,13 +1013,21 @@ export default function Destinos() {
                 <div className="space-y-3 border-t pt-4">
                   <h4 className="font-semibold text-sm text-foreground">Incluso no pacote</h4>
                   <div className="space-y-2 text-xs">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Coffee className="h-3 w-3" />
-                      <span>Café da manhã incluso</span>
-                    </div>
+                    {trip.includes_breakfast && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Coffee className="h-3 w-3" />
+                        <span>Café da manhã incluso</span>
+                      </div>
+                    )}
+                    {trip.includes_accommodation && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Bed className="h-3 w-3" />
+                        <span>Hospedagem inclusa</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      <span>Duração: 3 dias em cada excursão</span>
+                      <span>Duração: {trip.duration_hours}h {trip.duration_hours >= 24 ? `(${Math.floor(trip.duration_hours / 24)} dia${Math.floor(trip.duration_hours / 24) > 1 ? 's' : ''})` : ''}</span>
                     </div>
                   </div>
                 </div>
