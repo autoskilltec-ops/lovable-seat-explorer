@@ -8,9 +8,13 @@ export function useAdmin() {
   const { data: isAdmin, isLoading, error } = useQuery({
     queryKey: ['admin-check', user?.id],
     queryFn: async () => {
-      if (!user?.id) return false;
+      if (!user?.id) {
+        console.log('🔍 useAdmin: No user ID');
+        return false;
+      }
       
       try {
+        console.log('🔍 useAdmin: Checking admin status for user:', user.id);
         // Versão temporária que verifica diretamente na tabela profiles
         const { data, error } = await supabase
           .from('profiles')
@@ -23,7 +27,9 @@ export function useAdmin() {
           return false;
         }
         
-        return data?.role === 'admin';
+        const isAdminResult = data?.role === 'admin';
+        console.log('🔍 useAdmin: Result:', { role: data?.role, isAdmin: isAdminResult });
+        return isAdminResult;
       } catch (err) {
         console.error('Error in admin check:', err);
         return false;

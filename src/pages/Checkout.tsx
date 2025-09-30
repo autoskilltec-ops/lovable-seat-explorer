@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAdmin } from "@/hooks/useAdmin";
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import BusSeatMap from "@/components/BusSeatMap";
 
@@ -29,6 +30,7 @@ export default function Checkout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin } = useAdmin();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -207,7 +209,19 @@ export default function Checkout() {
           emergency_contact: formData.emergencyContact,
         });
 
-      // Criar reserva com status 'pendente'
+      // Determinar status inicial da reserva baseado no tipo de usuário
+      const initialStatus = isAdmin ? 'pago' : 'pendente';
+      
+      console.log('🔍 Debug Checkout:', {
+        userId: user.id,
+        userEmail: user.email,
+        isAdmin,
+        initialStatus,
+        planType: formData.planType,
+        passengers: formData.passengers
+      });
+      
+      // Criar reserva com status baseado no tipo de usuário
       const { data: reservation, error: reservationError } = await supabase
         .from("reservations")
         .insert({
@@ -223,15 +237,24 @@ export default function Checkout() {
           emergency_contact: formData.emergencyContact,
           seat_ids: selectedSeats,
           codigo_confirmacao: Math.random().toString(36).substring(2, 10).toUpperCase(),
-          status: 'pendente',
+          status: initialStatus,
         })
         .select()
         .single();
 
       if (reservationError) throw reservationError;
 
+      console.log('✅ Reserva criada:', {
+        id: reservation.id,
+        status: reservation.status,
+        codigo: reservation.codigo_confirmacao
+      });
+
       // Criar registro de pagamento
       const paymentMethod = formData.paymentMethod === "cartao_credito" || formData.paymentMethod === "cartao_debito" ? "cartao" : "pix";
+      
+      // Status do pagamento baseado no tipo de usuário
+      const paymentStatus = isAdmin ? 'aprovado' : 'iniciado';
       
       const { error: paymentError } = await supabase
         .from("payments")
@@ -240,26 +263,30 @@ export default function Checkout() {
           method: paymentMethod,
           payment_method_preference: formData.paymentMethod,
           reservation_id: reservation.id,
-          status: 'aprovado', // Marca como aprovado para processar
+          status: paymentStatus,
         });
 
       if (paymentError) throw paymentError;
 
-      // Atualizar status da reserva para 'pago'
-      // Isso acionará automaticamente o trigger que atualiza os assentos
-      const { error: updateError } = await supabase
-        .from("reservations")
-        .update({ status: 'pago' })
-        .eq("id", reservation.id);
-
-      if (updateError) throw updateError;
+      // Se for admin, a reserva já foi criada como 'pago'
+      // Se for usuário normal, manter como 'pendente' para aprovação posterior
+      if (isAdmin) {
+        // Para admin, a reserva já está como 'pago', então os assentos já foram atualizados
+        // Não precisa fazer nada adicional
+      } else {
+        // Para usuários normais, a reserva fica como 'pendente'
+        // Os assentos não são ocupados até o admin confirmar
+        console.log('Reserva criada como pendente, aguardando confirmação do admin');
+      }
 
       // Enviar para WhatsApp
       await sendToWhatsApp(reservation);
 
       toast({
-        title: "Reserva confirmada com sucesso!",
-        description: "Abrindo WhatsApp e redirecionando para Minhas Reservas...",
+        title: isAdmin ? "Reserva confirmada com sucesso!" : "Reserva criada com sucesso!",
+        description: isAdmin 
+          ? "Abrindo WhatsApp e redirecionando para Minhas Reservas..." 
+          : "Sua reserva foi criada e está aguardando confirmação. Abrindo WhatsApp...",
       });
 
       navigate("/minhas-reservas");
@@ -298,6 +325,8 @@ export default function Checkout() {
       }
     }
 
+    const statusMessage = isAdmin ? "✅ *CONFIRMADA*" : "⏳ *AGUARDANDO CONFIRMAÇÃO*";
+    
     const message = `🚌 *NOVA RESERVA DE VIAGEM*
 
 👤 *Cliente:* ${formData.customerName}
@@ -318,6 +347,7 @@ export default function Checkout() {
 💳 *Método de Pagamento Preferido:* ${formData.paymentMethod === "pix" ? "PIX" : formData.paymentMethod === "cartao_credito" ? "Cartão de Crédito" : "Cartão de Débito"}
 
 🔖 *Código da Reserva:* ${reservation.codigo_confirmacao}
+📊 *Status:* ${statusMessage}
 
 ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}`;
 
