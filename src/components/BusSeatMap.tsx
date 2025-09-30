@@ -95,6 +95,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   }, [selectedBusId]);
 
   const fetchBusesAndData = async () => {
+    setLoading(true);
     try {
       if (showOnlyReservationBus && reservationBusId) {
         // Se estamos mostrando apenas o ônibus da reserva, buscar apenas esse ônibus
@@ -351,8 +352,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
               reserved_until: null 
             })
             .eq("id", seat.id);
-          // Update bus stats after successful API call
-          fetchBusesAndData();
+          // Realtime update will handle UI refresh
         } catch (error) {
           console.error("Erro ao liberar assento:", error);
           // Revert local state on error
@@ -404,8 +404,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
               reserved_until: reservedUntil.toISOString()
             })
             .eq("id", seat.id);
-          // Update bus stats after successful API call
-          fetchBusesAndData();
+          // Realtime update will handle UI refresh
         } catch (error) {
           console.error("Erro ao reservar assento:", error);
           // Revert local state on error

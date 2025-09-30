@@ -161,6 +161,30 @@ export default function Checkout() {
         return;
       }
 
+      // Validar disponibilidade dos assentos antes de prosseguir
+      if (selectedSeats.length > 0) {
+        const { data: seatsCheck, error: seatsError } = await supabase
+          .from("bus_seats")
+          .select("id, status")
+          .in("id", selectedSeats);
+
+        if (seatsError) throw seatsError;
+
+        const unavailableSeats = seatsCheck?.filter(
+          seat => seat.status === 'ocupado'
+        );
+
+        if (unavailableSeats && unavailableSeats.length > 0) {
+          toast({
+            title: "Assentos indisponíveis",
+            description: "Alguns assentos selecionados já foram ocupados. Por favor, selecione outros assentos.",
+            variant: "destructive",
+          });
+          setSubmitting(false);
+          return;
+        }
+      }
+
       // Criar perfil se não existir (apenas para autenticação)
       await supabase
         .from("profiles")
@@ -171,7 +195,7 @@ export default function Checkout() {
           phone: user.user_metadata?.phone || formData.customerPhone,
         });
 
-      // Salvar dados do cliente na tabela separada (versão temporária)
+      // Salvar dados do cliente na tabela separada
       await supabase
         .from("customer_data")
         .upsert({
@@ -183,7 +207,7 @@ export default function Checkout() {
           emergency_contact: formData.emergencyContact,
         });
 
-      // Criar reserva
+      // Criar reserva com status 'pendente'
       const { data: reservation, error: reservationError } = await supabase
         .from("reservations")
         .insert({
@@ -199,40 +223,42 @@ export default function Checkout() {
           emergency_contact: formData.emergencyContact,
           seat_ids: selectedSeats,
           codigo_confirmacao: Math.random().toString(36).substring(2, 10).toUpperCase(),
+          status: 'pendente',
         })
         .select()
         .single();
 
       if (reservationError) throw reservationError;
 
-      // Update selected seats to occupied
-      if (selectedSeats.length > 0) {
-        await supabase
-          .from("bus_seats")
-          .update({ 
-            status: 'ocupado',
-            reserved_until: null 
-          })
-          .in("id", selectedSeats);
-      }
-
       // Criar registro de pagamento
       const paymentMethod = formData.paymentMethod === "cartao_credito" || formData.paymentMethod === "cartao_debito" ? "cartao" : "pix";
       
-      await supabase
+      const { error: paymentError } = await supabase
         .from("payments")
         .insert({
           amount: getTotalAmount(),
           method: paymentMethod,
           payment_method_preference: formData.paymentMethod,
           reservation_id: reservation.id,
+          status: 'aprovado', // Marca como aprovado para processar
         });
 
-      // Enviar para WhatsApp e redirecionar para Minhas Reservas
+      if (paymentError) throw paymentError;
+
+      // Atualizar status da reserva para 'pago'
+      // Isso acionará automaticamente o trigger que atualiza os assentos
+      const { error: updateError } = await supabase
+        .from("reservations")
+        .update({ status: 'pago' })
+        .eq("id", reservation.id);
+
+      if (updateError) throw updateError;
+
+      // Enviar para WhatsApp
       await sendToWhatsApp(reservation);
 
       toast({
-        title: "Reserva criada com sucesso!",
+        title: "Reserva confirmada com sucesso!",
         description: "Abrindo WhatsApp e redirecionando para Minhas Reservas...",
       });
 
@@ -241,8 +267,8 @@ export default function Checkout() {
     } catch (error: any) {
       console.error("Erro ao criar reserva:", error);
       toast({
-        title: "Erro",
-        description: error.message || "Erro ao criar reserva",
+        title: "Erro ao processar reserva",
+        description: error.message || "Ocorreu um erro ao processar sua reserva. Tente novamente.",
         variant: "destructive",
       });
     } finally {
