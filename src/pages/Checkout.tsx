@@ -136,7 +136,13 @@ export default function Checkout() {
   };
 
   const getTotalAmount = () => {
-    return getPlanPrice() * formData.passengers;
+    const planPrice = getPlanPrice();
+    // Apenas plano individual multiplica pelo número de passageiros
+    // Casal e Grupo já têm preço fixo para 2 e 4 pessoas respectivamente
+    if (formData.planType === "individual") {
+      return planPrice * formData.passengers;
+    }
+    return planPrice;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
