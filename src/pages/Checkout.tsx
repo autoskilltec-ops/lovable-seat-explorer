@@ -58,6 +58,17 @@ export default function Checkout() {
     setFormData(prev => ({ ...prev, planType }));
   }, [tripId, planType]);
 
+  // Atualizar número de passageiros baseado no plano selecionado
+  useEffect(() => {
+    if (formData.planType === "couple") {
+      setFormData(prev => ({ ...prev, passengers: 2 }));
+    } else if (formData.planType === "group") {
+      setFormData(prev => ({ ...prev, passengers: 4 }));
+    } else if (formData.planType === "individual" && formData.passengers > 4) {
+      setFormData(prev => ({ ...prev, passengers: 4 }));
+    }
+  }, [formData.planType]);
+
   // Limpar URL do WhatsApp quando o componente for desmontado
   useEffect(() => {
     return () => {
@@ -512,10 +523,12 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
                     id="passengers"
                     type="number"
                     min="1"
-                    max="10"
+                    max={formData.planType === "individual" ? "4" : undefined}
                     value={formData.passengers}
                     onChange={(e) => setFormData(prev => ({ ...prev, passengers: parseInt(e.target.value) || 1 }))}
+                    disabled={formData.planType === "couple" || formData.planType === "group"}
                     required
+                    className={formData.planType !== "individual" ? "bg-muted cursor-not-allowed" : ""}
                   />
                 </div>
 
