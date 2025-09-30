@@ -279,6 +279,45 @@ export type Database = {
         }
         Relationships: []
       }
+      reservation_seat_audit: {
+        Row: {
+          action: string
+          created_at: string
+          error_message: string | null
+          failed_seat_ids: string[] | null
+          id: string
+          performed_by: string | null
+          reservation_id: string
+          seat_ids: string[]
+          seats_expected: number
+          seats_updated: number
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          error_message?: string | null
+          failed_seat_ids?: string[] | null
+          id?: string
+          performed_by?: string | null
+          reservation_id: string
+          seat_ids: string[]
+          seats_expected: number
+          seats_updated?: number
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          error_message?: string | null
+          failed_seat_ids?: string[] | null
+          id?: string
+          performed_by?: string | null
+          reservation_id?: string
+          seat_ids?: string[]
+          seats_expected?: number
+          seats_updated?: number
+        }
+        Relationships: []
+      }
       reservations: {
         Row: {
           codigo_confirmacao: string
@@ -412,9 +451,25 @@ export type Database = {
         Args: { seat_ids: string[] }
         Returns: undefined
       }
+      audit_reservation_seats_consistency: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          reservation_id: string
+          seat_ids: string[]
+          seats_already_occupied: number
+          seats_not_found: number
+          seats_with_wrong_trip: number
+          status: string
+          trip_id: string
+        }[]
+      }
       clean_expired_seat_holds: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      confirm_reservation_seats: {
+        Args: { _performed_by?: string; _reservation_id: string }
+        Returns: Json
       }
       delete_trip_cascade: {
         Args: { trip_uuid: string }

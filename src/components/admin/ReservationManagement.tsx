@@ -135,7 +135,8 @@ const ReservationManagement = () => {
       const reservation = reservations.find(r => r.id === reservationId);
       if (!reservation) throw new Error("Reserva não encontrada");
       
-      // Atualizar status da reserva para "pago" com timestamp de aprovação
+      // Atualizar status da reserva para "pago"
+      // O trigger do banco atualizará os assentos automaticamente
       const { error: reservationError } = await supabase
         .from('reservations')
         .update({ 
@@ -146,7 +147,7 @@ const ReservationManagement = () => {
 
       if (reservationError) throw reservationError;
 
-      // Buscar os números dos assentos se houver seat_ids
+      // Buscar os números dos assentos para o email
       let seatNumbers: string[] = [];
       if (reservation.seat_ids && reservation.seat_ids.length > 0) {
         const { data: seatData, error: seatQueryError } = await supabase
@@ -160,25 +161,24 @@ const ReservationManagement = () => {
         } else {
           seatNumbers = seatData.map(seat => seat.seat_number.toString());
         }
+      }
+      
+      // Verificar se todos os assentos foram atualizados consultando o log de auditoria
+      const { data: auditLog } = await supabase
+        .from('reservation_seat_audit')
+        .select('*')
+        .eq('reservation_id', reservationId)
+        .eq('action', 'confirm')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-        // Atualizar assentos para ocupado
-        const { error: seatsError } = await supabase
-          .from('bus_seats')
-          .update({ 
-            status: 'ocupado',
-            reserved_until: null // Remove reserva temporária
-          })
-          .in('id', reservation.seat_ids)
-          .eq('trip_id', reservation.trip.id);
-
-        if (seatsError) {
-          console.error('Erro ao atualizar assentos:', seatsError);
-          toast({
-            title: "Aviso",
-            description: "Reserva confirmada, mas houve problema ao atualizar os assentos",
-            variant: "destructive"
-          });
-        }
+      if (auditLog && auditLog.seats_updated < auditLog.seats_expected) {
+        toast({
+          title: "Aviso - Verificar Assentos",
+          description: `Reserva confirmada, mas apenas ${auditLog.seats_updated} de ${auditLog.seats_expected} assentos foram atualizados. Verifique os logs de auditoria.`,
+          variant: "destructive"
+        });
       }
 
       // Enviar e-mail de confirmação para o e-mail do usuário que fez a reserva
