@@ -68,7 +68,7 @@ const Header = () => {
               className="glass-surface border-0 hover:glass-hover hidden sm:flex"
             >
               <User className="h-4 w-4 mr-2" />
-              Minha Conta
+              {user?.email || "Minha Conta"}
             </Button>
 
             {user && (
@@ -115,7 +115,7 @@ const Header = () => {
                   <div className="pt-4 border-t border-glass-border/30">
                     <Button className="w-full glass-button border-0">
                       <User className="h-4 w-4 mr-2" />
-                      Minha Conta
+                      {user?.email || "Minha Conta"}
                     </Button>
                   </div>
                 </div>
