@@ -173,7 +173,7 @@ export default function Checkout() {
         if (seatsError) throw seatsError;
 
         const unavailableSeats = seatsCheck?.filter(
-          seat => seat.status === 'ocupado'
+          seat => seat.status === 'ocupado' || seat.status === 'reservado'
         );
 
         if (unavailableSeats && unavailableSeats.length > 0) {
@@ -271,22 +271,26 @@ export default function Checkout() {
       // Marcar assentos como 'reservado' se for reserva pendente, ou já ficam 'ocupado' se for admin (via trigger)
       if (!isAdmin && selectedSeats.length > 0) {
         // Para usuários normais, marcar assentos como 'reservado' (amarelo)
-        const { error: seatsUpdateError } = await supabase
+        console.log('🔄 Marcando assentos como reservado:', selectedSeats);
+        
+        const { data: updatedSeats, error: seatsUpdateError } = await supabase
           .from('bus_seats')
           .update({ 
             status: 'reservado',
             reserved_until: null 
           })
-          .in('id', selectedSeats);
+          .in('id', selectedSeats)
+          .select();
 
         if (seatsUpdateError) {
-          console.error('Erro ao marcar assentos como reservado:', seatsUpdateError);
+          console.error('❌ Erro ao marcar assentos como reservado:', seatsUpdateError);
+          throw new Error('Falha ao reservar assentos: ' + seatsUpdateError.message);
         } else {
-          console.log('Assentos marcados como reservado (aguardando confirmação)');
+          console.log('✅ Assentos marcados como reservado (aguardando confirmação):', updatedSeats);
         }
       } else if (isAdmin) {
         // Para admin, a reserva já está como 'pago', então os assentos já foram atualizados para 'ocupado' pelo trigger
-        console.log('Reserva confirmada automaticamente (admin), assentos marcados como ocupado');
+        console.log('✅ Reserva confirmada automaticamente (admin), assentos marcados como ocupado pelo trigger');
       }
 
       // Enviar para WhatsApp
