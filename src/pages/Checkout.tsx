@@ -268,15 +268,25 @@ export default function Checkout() {
 
       if (paymentError) throw paymentError;
 
-      // Se for admin, a reserva já foi criada como 'pago'
-      // Se for usuário normal, manter como 'pendente' para aprovação posterior
-      if (isAdmin) {
-        // Para admin, a reserva já está como 'pago', então os assentos já foram atualizados
-        // Não precisa fazer nada adicional
-      } else {
-        // Para usuários normais, a reserva fica como 'pendente'
-        // Os assentos não são ocupados até o admin confirmar
-        console.log('Reserva criada como pendente, aguardando confirmação do admin');
+      // Marcar assentos como 'reservado' se for reserva pendente, ou já ficam 'ocupado' se for admin (via trigger)
+      if (!isAdmin && selectedSeats.length > 0) {
+        // Para usuários normais, marcar assentos como 'reservado' (amarelo)
+        const { error: seatsUpdateError } = await supabase
+          .from('bus_seats')
+          .update({ 
+            status: 'reservado',
+            reserved_until: null 
+          })
+          .in('id', selectedSeats);
+
+        if (seatsUpdateError) {
+          console.error('Erro ao marcar assentos como reservado:', seatsUpdateError);
+        } else {
+          console.log('Assentos marcados como reservado (aguardando confirmação)');
+        }
+      } else if (isAdmin) {
+        // Para admin, a reserva já está como 'pago', então os assentos já foram atualizados para 'ocupado' pelo trigger
+        console.log('Reserva confirmada automaticamente (admin), assentos marcados como ocupado');
       }
 
       // Enviar para WhatsApp

@@ -601,7 +601,11 @@ export type Database = {
       payment_preference: "pix" | "cartao_credito" | "cartao_debito"
       payment_status: "iniciado" | "aprovado" | "recusado" | "cancelado"
       reservation_status: "pendente" | "pago" | "cancelado" | '""'
-      seat_status: "disponivel" | "reservado_temporario" | "ocupado"
+      seat_status:
+        | "disponivel"
+        | "reservado_temporario"
+        | "ocupado"
+        | "reservado"
       user_role: "user" | "admin"
     }
     CompositeTypes: {
@@ -734,7 +738,12 @@ export const Constants = {
       payment_preference: ["pix", "cartao_credito", "cartao_debito"],
       payment_status: ["iniciado", "aprovado", "recusado", "cancelado"],
       reservation_status: ["pendente", "pago", "cancelado", '""'],
-      seat_status: ["disponivel", "reservado_temporario", "ocupado"],
+      seat_status: [
+        "disponivel",
+        "reservado_temporario",
+        "ocupado",
+        "reservado",
+      ],
       user_role: ["user", "admin"],
     },
   },

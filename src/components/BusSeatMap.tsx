@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 interface BusSeat {
   id: string;
   seat_number: number;
-  status: 'disponivel' | 'ocupado' | 'reservado_temporario';
+  status: 'disponivel' | 'ocupado' | 'reservado_temporario' | 'reservado';
   reserved_until?: string;
   bus_id?: string;
 }
@@ -120,7 +120,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         const seats = busData.bus_seats || [];
         const totalSeats = seats.length;
         const availableSeats = seats.filter(s => s.status === 'disponivel').length;
-        const occupiedSeats = seats.filter(s => s.status === 'ocupado').length;
+        const occupiedSeats = seats.filter(s => s.status === 'ocupado' || s.status === 'reservado').length;
 
         const busInfo = {
           bus_id: busData.id,
@@ -324,7 +324,17 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   };
 
   const handleSeatClick = async (seat: BusSeat) => {
-    if (seat.status === 'ocupado') return;
+    // Não permitir seleção de assentos ocupados ou reservados
+    if (seat.status === 'ocupado' || seat.status === 'reservado') {
+      toast({
+        title: "Assento indisponível",
+        description: seat.status === 'reservado' 
+          ? "Este assento está reservado aguardando confirmação"
+          : "Este assento já está ocupado",
+        variant: "destructive"
+      });
+      return;
+    }
 
     const isSelected = selectedSeats.includes(seat.id);
     let newSelectedSeats: string[];
@@ -432,7 +442,9 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     
     switch (seat.status) {
       case 'ocupado':
-        return "bg-destructive text-destructive-foreground cursor-not-allowed";
+        return "bg-red-500/80 text-white cursor-not-allowed font-semibold";
+      case 'reservado':
+        return "bg-yellow-500/80 text-yellow-950 cursor-not-allowed font-semibold";
       case 'reservado_temporario':
         return selectedSeats.includes(seat.id) 
           ? "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -511,7 +523,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                           handleSeatClick(seat);
                         }
                       }}
-                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
+                      disabled={seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -538,7 +550,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                           handleSeatClick(seat);
                         }
                       }}
-                      disabled={seat.status === 'ocupado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
+                      disabled={seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -560,12 +572,12 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
             <span>Selecionado</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-muted rounded"></div>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-500/80 rounded"></div>
             <span>Reservado</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-destructive rounded"></div>
-            <span>Ocupado</span>
+            <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500/80 rounded"></div>
+            <span>Indisponível</span>
           </div>
         </div>
       </div>
