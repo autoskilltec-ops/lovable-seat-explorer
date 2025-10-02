@@ -481,10 +481,10 @@ export default function Destinos() {
 
       if (busError) throw busError;
 
-      // Create seats for each bus (45 seats per bus)
+      // Create seats for each bus (60 seats per bus)
       const allSeats = [];
       busData.forEach((bus) => {
-        for (let seatNumber = 1; seatNumber <= 45; seatNumber++) {
+        for (let seatNumber = 1; seatNumber <= 60; seatNumber++) {
           allSeats.push({
             trip_id: tripData.id,
             bus_id: bus.id,
