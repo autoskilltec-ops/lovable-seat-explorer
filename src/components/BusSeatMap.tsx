@@ -39,7 +39,20 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   const [buses, setBuses] = useState<Bus[]>([]);
   const [selectedBusId, setSelectedBusId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isInteracting, setIsInteracting] = useState(false);
   const { toast } = useToast();
+
+  // Marcar que o usuário está interagindo quando há assentos selecionados
+  useEffect(() => {
+    if (selectedSeats.length > 0) {
+      setIsInteracting(true);
+      // Manter flag por 5 segundos após última seleção
+      const timer = setTimeout(() => {
+        setIsInteracting(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedSeats]);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,24 +67,34 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     
     initializeData();
     
-    // Clean expired holds every 30 seconds
+    // Clean expired holds every 30 seconds - mas não durante interação
     const interval = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !isInteracting && !isSubmitting) {
         cleanExpiredHolds();
       }
     }, 30000);
     
-    // Realtime: listen to seat updates for this trip and refresh UI
-    // BUT: disable during submission to prevent deselection bugs
+    // Realtime: listen to seat updates BUT disable during user interaction or submission
     const channel = supabase.channel(`bus_seats_trip_${tripId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'bus_seats',
         filter: `trip_id=eq.${tripId}`
-      }, () => {
-        if (isMounted && !isSubmitting) {
+      }, (payload: any) => {
+        // Ignorar eventos dos próprios assentos selecionados
+        const changedSeatId = payload?.new?.id || payload?.old?.id;
+        if (changedSeatId && selectedSeats.includes(changedSeatId)) {
+          console.log('🔇 Ignorando update do próprio assento:', changedSeatId);
+          return;
+        }
+        
+        // Não atualizar durante interação ou submissão
+        if (isMounted && !isInteracting && !isSubmitting) {
+          console.log('🔄 Atualizando assentos via realtime');
           fetchBusesAndData();
+        } else {
+          console.log('🔇 Realtime pausado (interagindo ou submetendo)');
         }
       })
       .subscribe();
@@ -85,7 +108,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         console.error("Error removing channel:", error);
       }
     };
-  }, [tripId]);
+  }, [tripId, isInteracting, isSubmitting, selectedSeats]);
 
   // When bus selection changes, fetch seats for that bus
   useEffect(() => {
@@ -267,14 +290,22 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
   const cleanExpiredHolds = async () => {
     try {
+      console.log('🧹 Limpando reservas expiradas...');
       await supabase.rpc('clean_expired_seat_holds');
-      // Refresh current bus data
-      if (selectedBusId) {
-        fetchSeatsForBus(selectedBusId);
+      
+      // Não atualizar se usuário estiver interagindo ou submetendo
+      if (!isInteracting && !isSubmitting) {
+        // Refresh current bus data
+        if (selectedBusId) {
+          fetchSeatsForBus(selectedBusId);
+        } else {
+          fallbackFetchSeats();
+        }
+        fetchBusesAndData(); // Update bus occupancy stats
+        console.log('✅ Limpeza concluída e dados atualizados');
       } else {
-        fallbackFetchSeats();
+        console.log('🔇 Limpeza executada, mas UI não atualizada (usuário interagindo)');
       }
-      fetchBusesAndData(); // Update bus occupancy stats
     } catch (error) {
       console.error("Erro ao limpar reservas expiradas:", error);
     }
@@ -330,6 +361,9 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     if (isSubmitting) {
       return;
     }
+    
+    // Marcar início de interação
+    setIsInteracting(true);
     
     // Não permitir seleção de assentos ocupados ou reservados
     if (seat.status === 'ocupado' || seat.status === 'reservado') {
