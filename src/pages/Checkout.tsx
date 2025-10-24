@@ -550,6 +550,7 @@ ${formData.observations ? `📝 *Observações:* ${formData.observations}` : ""}
           selectedSeats={selectedSeats}
           onSeatSelection={setSelectedSeats}
           isAdmin={false}
+          isSubmitting={submitting}
         />
 
         {/* Formulário */}

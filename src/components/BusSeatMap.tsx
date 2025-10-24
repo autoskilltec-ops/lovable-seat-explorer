@@ -31,9 +31,10 @@ interface BusSeatMapProps {
   isReallocation?: boolean; // New prop to indicate if this is for seat reallocation
   showOnlyReservationBus?: boolean; // New prop to show only the bus with the reservation
   reservationBusId?: string; // ID of the bus that contains the reservation
+  isSubmitting?: boolean; // New prop to disable interaction during submission
 }
 
-export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection, isAdmin = false, isReallocation = false, showOnlyReservationBus = false, reservationBusId }: BusSeatMapProps) {
+export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSeatSelection, isAdmin = false, isReallocation = false, showOnlyReservationBus = false, reservationBusId, isSubmitting = false }: BusSeatMapProps) {
   const [seats, setSeats] = useState<BusSeat[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [selectedBusId, setSelectedBusId] = useState<string>("");
@@ -61,6 +62,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
     }, 30000);
     
     // Realtime: listen to seat updates for this trip and refresh UI
+    // BUT: disable during submission to prevent deselection bugs
     const channel = supabase.channel(`bus_seats_trip_${tripId}`)
       .on('postgres_changes', {
         event: '*',
@@ -68,7 +70,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         table: 'bus_seats',
         filter: `trip_id=eq.${tripId}`
       }, () => {
-        if (isMounted) {
+        if (isMounted && !isSubmitting) {
           fetchBusesAndData();
         }
       })
@@ -324,6 +326,11 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   };
 
   const handleSeatClick = async (seat: BusSeat) => {
+    // Prevent any interaction during submission
+    if (isSubmitting) {
+      return;
+    }
+    
     // Não permitir seleção de assentos ocupados ou reservados
     if (seat.status === 'ocupado' || seat.status === 'reservado') {
       toast({
@@ -509,13 +516,14 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                 {/* Left side seats */}
                 <div className="flex gap-1">
                   {leftPair.map(seat => (
-                    <Button
+                     <Button
                       key={`left-${seat.id}`}
                       variant="outline"
                       size="sm"
                       className={cn(
                         "h-8 w-8 p-0 text-xs font-mono",
-                        getSeatColor(seat)
+                        getSeatColor(seat),
+                        isSubmitting && "cursor-not-allowed opacity-50"
                       )}
                       onClick={() => {
                         // Only handle clicks on real seats, not virtual ones
@@ -523,7 +531,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                           handleSeatClick(seat);
                         }
                       }}
-                      disabled={seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
+                      disabled={isSubmitting || seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -542,7 +550,8 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                       size="sm"
                       className={cn(
                         "h-8 w-8 p-0 text-xs font-mono",
-                        getSeatColor(seat)
+                        getSeatColor(seat),
+                        isSubmitting && "cursor-not-allowed opacity-50"
                       )}
                       onClick={() => {
                         // Only handle clicks on real seats, not virtual ones
@@ -550,7 +559,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
                           handleSeatClick(seat);
                         }
                       }}
-                      disabled={seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
+                      disabled={isSubmitting || seat.status === 'ocupado' || seat.status === 'reservado' || (seat.status === 'reservado_temporario' && !selectedSeats.includes(seat.id)) || seat.id.startsWith('virtual-') || showOnlyReservationBus}
                     >
                       {seat.seat_number}
                     </Button>
@@ -603,7 +612,15 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
   }
 
   return (
-    <Card>
+    <Card className="relative">
+      {isSubmitting && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="text-sm font-medium">Processando reserva...</p>
+          </div>
+        </div>
+      )}
       <CardHeader>
         <CardTitle>Seleção de Assentos</CardTitle>
         <CardDescription>
@@ -628,7 +645,7 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
         {buses.length > 1 && !showOnlyReservationBus && (
           <div className="space-y-2">
             <label className="text-sm font-medium">Selecione o Ônibus:</label>
-            <Select value={selectedBusId} onValueChange={setSelectedBusId}>
+            <Select value={selectedBusId} onValueChange={setSelectedBusId} disabled={isSubmitting}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Escolha um ônibus" />
               </SelectTrigger>
