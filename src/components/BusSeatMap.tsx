@@ -157,6 +157,9 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
         setBuses([busInfo]);
         setSelectedBusId(busData.id);
+        // Preenche assentos imediatamente e finaliza loading
+        setSeats(seats);
+        setLoading(false);
       } else {
         // Buscar todos os ônibus da viagem (comportamento normal)
         const { data: busData, error: busError } = await supabase
@@ -164,12 +167,23 @@ export default function BusSeatMap({ tripId, maxPassengers, selectedSeats, onSea
 
         if (busError) throw busError;
 
-        setBuses(busData || []);
+        const list = busData || [];
+        setBuses(list);
         
-        // Select first available bus by default if none selected and buses exist
-        if (busData && busData.length > 0 && !selectedBusId) {
-          const availableBus = getFirstAvailableBus(busData);
-          setSelectedBusId(availableBus.bus_id);
+        // Definir ônibus alvo: manter o atual se existir, senão pegar o primeiro disponível
+        let busIdToUse = selectedBusId;
+        if (list.length > 0 && !busIdToUse) {
+          const availableBus = getFirstAvailableBus(list);
+          busIdToUse = availableBus.bus_id;
+          setSelectedBusId(busIdToUse);
+        }
+
+        // Garantir carregar assentos ou finalizar loading quando não houver ônibus
+        if (busIdToUse) {
+          await fetchSeatsForBus(busIdToUse);
+        } else {
+          setSeats([]);
+          setLoading(false);
         }
       }
     } catch (error) {
